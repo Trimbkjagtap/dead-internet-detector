@@ -1,0 +1,3 @@
+.env 
+venv/ __pycache__/ *.pyc *.pt .DS_Store data/*.warc.gz data/*.csv models/*.pkl.env
+.env
