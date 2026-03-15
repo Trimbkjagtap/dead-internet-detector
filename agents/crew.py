@@ -1,0 +1,157 @@
+# agents/crew.py
+# Wires all 4 agents into a complete analysis pipeline
+# Run with: python3 agents/crew.py
+
+import sys
+import json
+sys.path.insert(0, '.')
+
+from agents.crawler_agent      import crawl_domains
+from agents.fingerprint_agent  import analyze_domains
+from agents.graph_builder_agent import build_graph
+from agents.verdict_agent      import produce_verdict
+
+
+def run_analysis(seed_domains: list) -> dict:
+    """
+    Run the complete 4-agent Dead Internet Detector pipeline.
+
+    Args:
+        seed_domains: list of domain strings to investigate
+                      e.g. ['suspicious-news.com', 'fake-updates.net']
+
+    Returns:
+        dict with:
+        - cluster_verdict: 'SYNTHETIC' | 'REVIEW' | 'ORGANIC'
+        - max_confidence: float 0–1
+        - domain_verdicts: per-domain breakdown
+        - graph_stats: Neo4j graph statistics
+        - summary: plain-English summary
+    """
+    print("=" * 55)
+    print("🕸️  Dead Internet Detector — Full Pipeline")
+    print("=" * 55)
+    print(f"Seed domains: {seed_domains}")
+    print()
+
+    # ── AGENT 1: Crawl domains ──────────────────────
+    print("━" * 40)
+    print("STEP 1/4 — Crawler Agent")
+    print("━" * 40)
+    crawled_data = crawl_domains(seed_domains)
+
+    if not crawled_data:
+        return {
+            'cluster_verdict': 'ERROR',
+            'error': 'Crawler returned no data — check internet connection',
+            'seed_domains': seed_domains,
+        }
+
+    print(f"  Crawled {len(crawled_data)} domains successfully")
+    print()
+
+    # ── AGENT 2: Compute signals ────────────────────
+    print("━" * 40)
+    print("STEP 2/4 — Fingerprint Analyst Agent")
+    print("━" * 40)
+    analysis = analyze_domains(crawled_data)
+
+    features  = analysis.get('features', {})
+    sim_edges = analysis.get('sim_edges', {})
+
+    print(f"  Features computed for {len(features)} domains")
+    print()
+
+    # ── AGENT 3: Build/update graph ─────────────────
+    print("━" * 40)
+    print("STEP 3/4 — Graph Builder Agent")
+    print("━" * 40)
+    graph_result = build_graph(analysis)
+    graph_stats  = graph_result.get('graph_stats', {})
+
+    print(f"  Graph: {graph_stats.get('total_nodes',0)} nodes, "
+          f"{graph_stats.get('total_edges',0)} edges")
+    print()
+
+    # ── AGENT 4: Produce verdict ────────────────────
+    print("━" * 40)
+    print("STEP 4/4 — Verdict Agent")
+    print("━" * 40)
+    verdict = produce_verdict(features, sim_edges)
+    print()
+
+    # ── Build final result ──────────────────────────
+    cluster = verdict.get('cluster_verdict', 'UNKNOWN')
+    conf    = verdict.get('max_confidence', 0.0)
+
+    # Generate human-readable summary
+    if cluster == 'SYNTHETIC':
+        summary = (
+            f"🚨 SYNTHETIC ECOSYSTEM DETECTED — "
+            f"{verdict.get('synthetic_domains',0)} domain(s) flagged. "
+            f"Maximum confidence: {conf:.0%}. "
+            f"This network shows coordinated artificial origin."
+        )
+    elif cluster == 'REVIEW':
+        summary = (
+            f"⚠️  REVIEW RECOMMENDED — "
+            f"{verdict.get('review_domains',0)} domain(s) need human review. "
+            f"Single signal triggered — not enough for automatic verdict."
+        )
+    else:
+        summary = (
+            f"✅ ORGANIC — No suspicious patterns detected. "
+            f"All {len(features)} domains appear to be legitimate. "
+            f"Maximum synthetic probability: {conf:.0%}."
+        )
+
+    final_result = {
+        'cluster_verdict':   cluster,
+        'max_confidence':    conf,
+        'synthetic_domains': verdict.get('synthetic_domains', 0),
+        'review_domains':    verdict.get('review_domains', 0),
+        'organic_domains':   verdict.get('organic_domains', 0),
+        'domain_verdicts':   verdict.get('domain_verdicts', {}),
+        'graph_stats':       graph_stats,
+        'summary':           summary,
+        'seed_domains':      seed_domains,
+        'domains_analyzed':  len(features),
+    }
+
+    # ── Print final summary ─────────────────────────
+    print("=" * 55)
+    print("🎯 FINAL RESULT")
+    print("=" * 55)
+    print(f"Verdict:    {cluster}")
+    print(f"Confidence: {conf:.3f}")
+    print(f"Summary:    {summary}")
+    print()
+    print("Per-domain breakdown:")
+    for domain, v in verdict.get('domain_verdicts', {}).items():
+        icon = "🔴" if v['verdict'] == 'SYNTHETIC' else \
+               "🟡" if v['verdict'] == 'REVIEW' else "🟢"
+        print(f"  {icon} {domain:<40} {v['verdict']} "
+              f"(conf={v['confidence']:.3f}, signals={v['signals_triggered']})")
+    print("=" * 55)
+
+    return final_result
+
+
+# ── Standalone test ──────────────────────────────────
+if __name__ == "__main__":
+    # Test with a mix of legitimate and potentially suspicious domains
+    test_domains = ["example.com", "bbc.com", "wikipedia.org"]
+
+    print("Running full pipeline test...")
+    print()
+
+    result = run_analysis(test_domains)
+
+    print()
+    print("Full result JSON:")
+    # Print without domain_verdicts for cleaner output
+    summary_result = {k: v for k, v in result.items()
+                      if k != 'domain_verdicts'}
+    print(json.dumps(summary_result, indent=2))
+    print()
+    print("🎉 Full pipeline test complete!")
