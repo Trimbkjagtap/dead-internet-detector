@@ -120,7 +120,6 @@ st.divider()
 
 # ── Input section ────────────────────────────────────
 st.subheader("🎯 Enter Seed Domains to Investigate")
-
 col1, col2 = st.columns([3, 1])
 
 with col1:
@@ -136,9 +135,9 @@ with col1:
 with col2:
     st.markdown("<br/>", unsafe_allow_html=True)
     st.markdown("**Try these examples:**")
-    if st.button("🟢 Legit sites", use_container_width=True):
+    if st.button("🟢 Legit sites", width='stretch'):
         st.session_state['preset'] = "bbc.com\nreuters.com\nnytimes.com"
-    if st.button("🔴 Suspicious", use_container_width=True):
+    if st.button("🔴 Suspicious", width='stretch'):
         st.session_state['preset'] = "breaking-truth-daily.com\nreal-news-network.net\npatriot-updates-now.com"
 
 # Apply preset if selected
@@ -158,7 +157,7 @@ st.caption(f"Domains to analyze: **{', '.join(domains)}**")
 analyze_clicked = st.button(
     "🔍 Analyze Domains",
     type="primary",
-    use_container_width=True,
+    width='stretch',
     disabled=len(domains) == 0
 )
 
@@ -379,7 +378,7 @@ if 'result' in st.session_state:
                     )
                 )
 
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width='stretch')
                 st.caption("🔴 Synthetic  🟠 Review  🟢 Organic — hover over nodes for details")
             else:
                 st.info("Graph is empty — run an analysis first")
@@ -422,3 +421,28 @@ if 'result' in st.session_state:
     # ── Raw JSON expander ────────────────────────────
     with st.expander("🔧 Raw API Response (for debugging)"):
         st.json(result)
+
+        # ── Download report ─────────────────────────────
+    st.divider()
+    st.subheader("📥 Download Report")
+
+    import json as _json
+    report = {
+        "project":        "Dead Internet Detector",
+        "analyzed_at":    result.get("analyzed_at", ""),
+        "seed_domains":   result.get("seed_domains", []),
+        "cluster_verdict": verdict,
+        "confidence":     confidence,
+        "summary":        summary,
+        "domain_verdicts": domain_verdicts,
+        "graph_stats":    result.get("graph_stats", {}),
+    }
+    report_json = _json.dumps(report, indent=2)
+
+    st.download_button(
+        label="📥 Download Full Report (JSON)",
+        data=report_json,
+        file_name="dead_internet_report.json",
+        mime="application/json",
+        width='stretch',
+    )
