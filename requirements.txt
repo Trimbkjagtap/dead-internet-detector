@@ -1,22 +1,9 @@
-fastapi
-uvicorn
-python-dotenv
-pydantic
+streamlit>=1.45.0
 requests
-beautifulsoup4
 pandas
 numpy
-sentence-transformers
-scikit-learn
---extra-index-url https://download.pytorch.org/whl/cpu
-torch --index-url https://download.pytorch.org/whl/cpu
-neo4j
-openai
-crewai>=0.86.0
 plotly
-streamlit>=1.45.0
 httpx
-pytest
-warcio
-tqdm
-langdetect
+python-dotenv
+neo4j
+beautifulsoup4
