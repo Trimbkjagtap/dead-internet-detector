@@ -58,7 +58,7 @@ st.markdown("""
 # ══════════════════════════════════════════════════════
 
 with st.sidebar:
-    st.image("https://img.icons8.com/fluency/96/spider-web.png", width=80)
+    st.markdown("# 🕸️")
     st.title("Dead Internet Detector")
     st.caption("INFO 7390 | Northeastern University")
 
@@ -157,11 +157,11 @@ col1, col2 = st.columns([3, 1])
 
 with col1:
     domains_input = st.text_area(
-        "Enter domains (one per line)",
-        value="example.com\nbbc.com\nwikipedia.org",
+        "🔍 Enter seed domains to investigate (one per line)",
+        value="breaking-truth-daily.com\nreal-news-network.net\npatriot-updates-now.com",
         height=120,
-        help="Enter 2-5 domains you want to investigate.",
-        placeholder="suspicious-news.com\nfake-updates.net"
+        help="Enter 2-5 domains. The system will crawl these and discover connected domains automatically. Minimum 2 domains recommended for meaningful graph analysis.",
+        placeholder="suspicious-news.com\nfake-updates.net\nbreaking-truth-daily.com"
     )
 
 with col2:
@@ -179,7 +179,10 @@ raw_domains = [d.strip() for d in domains_input.strip().split('\n') if d.strip()
 domains = raw_domains[:max_domains]
 
 if len(raw_domains) > max_domains:
-    st.warning(f"⚠️ Only analyzing first {max_domains} domains")
+    st.warning(f"⚠️ Only analyzing first {max_domains} domains (adjust slider in sidebar)")
+
+if len(domains) < 2:
+    st.info("💡 Tip: Enter at least 2 domains for meaningful network analysis")
 
 st.caption(f"Domains to analyze: **{', '.join(domains)}**")
 
