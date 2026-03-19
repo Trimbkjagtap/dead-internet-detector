@@ -225,4 +225,8 @@ This project was built for **INFO 7390: Data Science Discovery & Architecture** 
 
 ---
 
+## 🌐 Live Demo
+- **Backend API:** https://dead-internet-detector.onrender.com
+- **API Docs:**    https://dead-internet-detector.onrender.com/docs
+
 *Built with ❤️ by Trimbkeshwar Jagtap | Northeastern University 2025*
