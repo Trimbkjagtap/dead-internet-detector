@@ -14,7 +14,7 @@ py2neo
 openai
 crewai
 plotly
-streamlit
+streamlit==1.45.0
 httpx
 pytest
 warcio
