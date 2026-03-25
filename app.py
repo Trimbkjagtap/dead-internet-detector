@@ -1,5 +1,5 @@
 # app.py
-# Streamlit frontend for the Dead Internet Detector
+# Streamlit frontend for the Dead Internet Detector v2
 # Run with: streamlit run app.py
 
 import streamlit as st
@@ -24,8 +24,9 @@ st.set_page_config(
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
 try:
     BACKEND_URL = st.secrets.get("BACKEND_URL", BACKEND_URL)
-except:
+except Exception:
     pass
+
 
 # ── Custom CSS ───────────────────────────────────────
 st.markdown("""
@@ -49,14 +50,31 @@ st.markdown("""
         text-align: center; font-size: 28px; font-weight: 700;
         margin: 20px 0;
     }
+    .monitor-card {
+        background: #161b22; border: 1px solid #30363d;
+        border-radius: 10px; padding: 16px; margin: 8px 0;
+    }
+    .feed-ok { border-left: 4px solid #27ae60; }
+    .feed-warn { border-left: 4px solid #e67e22; }
+    .feed-off { border-left: 4px solid #e74c3c; }
 </style>
 """, unsafe_allow_html=True)
+
+
+# ── Helper: safe backend GET ─────────────────────────
+def api_get(path, timeout=15):
+    try:
+        r = requests.get(f"{BACKEND_URL}{path}", timeout=timeout)
+        if r.status_code == 200:
+            return r.json()
+    except Exception:
+        pass
+    return None
 
 
 # ══════════════════════════════════════════════════════
 # SIDEBAR
 # ══════════════════════════════════════════════════════
-
 with st.sidebar:
     st.markdown("# 🕸️")
     st.title("Dead Internet Detector")
@@ -64,583 +82,607 @@ with st.sidebar:
 
     st.divider()
 
-    st.subheader("⚙️ Settings")
-    max_domains = st.slider("Max domains to analyze", 1, 20, 5)
-
-    st.divider()
-
     st.subheader("📖 How It Works")
     st.markdown("""
     1. **Crawl** — fetch content from seed domains + linked sites
-    2. **Analyze** — compute 3 signals:
-       - 🔵 Content similarity
-       - 🟣 Publishing cadence
-       - 🟢 Domain registration
+    2. **Analyze** — compute 3 detection signals
     3. **Graph** — build domain network in Neo4j
-    4. **Verdict** — GNN classifies as SYNTHETIC or ORGANIC
+    4. **Verdict** — GNN classifies clusters
 
-    **2-of-3 rule:** flagged SYNTHETIC only if 2+ signals converge.
+    **2-of-3 rule:** flagged SYNTHETIC only when 2+ signals converge.
     """)
 
     st.divider()
 
-    st.subheader("⚖️ Ethical Use")
+    st.subheader("🔬 Detection Signals")
     st.markdown("""
-    - Research & journalism purposes only
-    - Human review required before any accusations
-    - 2-of-3 rule prevents false positives
-    - No personal data collected or stored
-    - Do not use to target legitimate publishers
+    | Signal | Method |
+    |--------|--------|
+    | Content Similarity | Sentence Transformers |
+    | Cadence Anomaly | Isolation Forest |
+    | WHOIS Registration | Domain age + heuristics |
     """)
 
     st.divider()
 
     st.subheader("🔌 Backend Status")
-    try:
-        r = requests.get(f"{BACKEND_URL}/health", timeout=5)
-        if r.status_code == 200:
-            st.success("✅ Backend connected")
-        else:
-            st.error("❌ Backend error")
-    except:
+    health = api_get("/health")
+    if health and health.get("status") == "ok":
+        st.success("✅ Backend connected")
+    else:
         st.error("❌ Backend offline")
         st.caption(f"Expected at: {BACKEND_URL}")
 
 
 # ══════════════════════════════════════════════════════
-# MAIN PAGE
+# MAIN PAGE — Two top-level tabs
 # ══════════════════════════════════════════════════════
 
 st.title("🕸️ Dead Internet Detector")
 st.caption("Detect coordinated synthetic content ecosystems using graph analysis and AI")
 
-# ── v2 monitor preview ───────────────────────────────
-with st.expander("📡 Live Monitor (v2 Preview)", expanded=False):
-    col_a, col_b = st.columns([1, 1])
+tab_analyze, tab_monitor = st.tabs(["🔍 Analyze Domains", "📡 Live Monitor Dashboard"])
 
-    if "monitor_job_id" not in st.session_state:
-        st.session_state["monitor_job_id"] = None
 
-    with col_a:
-        if st.button("▶️ Start Monitor Cycle", use_container_width=True):
-            try:
-                start_resp = requests.post(f"{BACKEND_URL}/monitor/start", timeout=20)
-                if start_resp.status_code == 200:
-                    st.session_state["monitor_job_id"] = start_resp.json().get("job_id")
-                    st.success(f"Monitor job started: {st.session_state['monitor_job_id']}")
-                else:
-                    st.error(f"Monitor start failed: {start_resp.text}")
-            except Exception as e:
-                st.error(f"Monitor start error: {str(e)}")
+# ══════════════════════════════════════════════════════
+# TAB 1 — ANALYZE DOMAINS
+# ══════════════════════════════════════════════════════
+with tab_analyze:
 
-        if st.button("🔄 Refresh Monitor Job", use_container_width=True):
+    # ── Settings row ─────────────────────────────────
+    col_input, col_presets = st.columns([3, 1])
+
+    with col_input:
+        st.subheader("🎯 Enter Seed Domains to Investigate")
+        domains_input = st.text_area(
+            "Enter domains (one per line)",
+            value="breaking-truth-daily.com\nreal-news-network.net\npatriot-updates-now.com",
+            height=120,
+            placeholder="suspicious-news.com\nfake-updates.net",
+        )
+        max_domains = st.slider("Max domains to analyze", 1, 20, 5, key="analyze_max")
+
+    with col_presets:
+        st.markdown("**Quick presets:**")
+        if st.button("🟢 Legit sites", use_container_width=True):
+            st.session_state["preset"] = "bbc.com\nreuters.com\nnytimes.com"
+            st.rerun()
+        if st.button("🔴 Suspicious", use_container_width=True):
+            st.session_state["preset"] = (
+                "breaking-truth-daily.com\n"
+                "real-news-network.net\n"
+                "patriot-updates-now.com"
+            )
             st.rerun()
 
-        job_id = st.session_state.get("monitor_job_id")
-        if job_id:
-            try:
-                job_resp = requests.get(f"{BACKEND_URL}/monitor/job/{job_id}", timeout=20)
-                if job_resp.status_code == 200:
-                    job = job_resp.json()
-                    status = job.get("status", "unknown")
-                    if status in ["queued", "running"]:
-                        st.info(f"Job {job_id} is {status}.")
-                    elif status == "completed":
-                        st.success(f"Job {job_id} completed")
-                        st.json(job.get("summary", {}))
-                    elif status == "failed":
-                        st.error(f"Job {job_id} failed: {job.get('error', 'unknown error')}")
-                        if job.get("traceback"):
-                            with st.expander("Traceback"):
-                                st.code(job.get("traceback"))
-                else:
-                    st.warning("Monitor job status unavailable")
-            except Exception as e:
-                st.warning(f"Monitor job polling error: {str(e)}")
+    if "preset" in st.session_state:
+        domains_input = st.session_state.pop("preset")
 
-    with col_b:
-        try:
-            status_resp = requests.get(f"{BACKEND_URL}/feed-status", timeout=15)
-            if status_resp.status_code == 200:
-                latest = status_resp.json().get("latest")
-                if latest:
-                    c1, c2, c3 = st.columns(3)
-                    with c1:
-                        st.metric("WHOISDS", latest.get("whoisds_count", 0))
-                    with c2:
-                        st.metric("Reddit", latest.get("reddit_count", 0))
-                    with c3:
-                        st.metric("Queued", latest.get("queued_unique", 0))
-                    st.caption(f"Last run: {latest.get('ran_at', 'n/a')}")
-                else:
-                    st.info("No monitor runs yet")
-            else:
-                st.warning("Feed status unavailable")
-        except Exception:
-            st.warning("Feed status unavailable")
+    raw_domains = [d.strip() for d in domains_input.strip().split("\n") if d.strip()]
+    domains = raw_domains[:max_domains]
 
-    try:
-        timeline_resp = requests.get(f"{BACKEND_URL}/timeline?limit=15", timeout=15)
-        if timeline_resp.status_code == 200:
-            timeline = timeline_resp.json().get("timeline", [])
-            if timeline:
-                df_tl = pd.DataFrame(timeline)
-                if "ran_at" in df_tl.columns:
-                    df_tl["ran_at"] = pd.to_datetime(df_tl["ran_at"], errors="coerce")
-                    df_tl = df_tl.sort_values("ran_at")
-                    fig_tl = px.line(
-                        df_tl,
-                        x="ran_at",
-                        y=["queued_unique", "whoisds_count", "reddit_count"],
-                        title="Recent Monitor Runs",
-                        markers=True,
-                    )
-                    fig_tl.update_layout(
-                        paper_bgcolor="#0e1117",
-                        plot_bgcolor="#0e1117",
-                        font_color="#e0e0e0",
-                        legend_title_text="",
-                    )
-                    st.plotly_chart(fig_tl, use_container_width=True)
-            else:
-                st.info("Timeline is empty. Run a monitor cycle to populate it.")
-        else:
-            st.warning("Timeline endpoint unavailable")
-    except Exception:
-        st.warning("Timeline endpoint unavailable")
+    if len(raw_domains) > max_domains:
+        st.warning(f"Only analyzing first {max_domains} domains (adjust slider above)")
+    if len(domains) < 2:
+        st.info("Enter at least 2 domains for meaningful network analysis")
 
-# ── About section ────────────────────────────────────
-with st.expander("ℹ️ About This Project", expanded=False):
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown("""
-        **The Dead Internet Detector** is an AI-powered system that detects coordinated
-        synthetic content ecosystems — networks of fake websites designed to manipulate
-        search rankings and public opinion.
+    st.caption(f"Domains to analyze: **{', '.join(domains)}**")
 
-        Unlike tools that check individual articles, this system asks the **network-level
-        question**: is this entire corner of the internet artificially coordinated?
-
-        ### 🔬 Detection Signals
-        | Signal | Method |
-        |--------|--------|
-        | 🔵 Content Similarity | Sentence Transformers + Cosine |
-        | 🟣 Cadence Anomaly | Isolation Forest ML |
-        | 🟢 WHOIS Registration | Domain age heuristics |
-        """)
-    with col2:
-        st.markdown("""
-        ### 🤖 AI Components
-        - **CrewAI** — 4 agents in sequence
-        - **GPT-4o** — agent reasoning + cluster analysis
-        - **Graph Neural Network** — domain classification
-        - **Neo4j AuraDB** — graph database
-
-        ### ⚖️ Ethical Guidelines
-        - Research and journalism only
-        - Human review before accusations
-        - 2-of-3 signals required for verdict
-        - No personal data collected
-        """)
-
-st.divider()
-
-# ── Input section ────────────────────────────────────
-st.subheader("🎯 Enter Seed Domains to Investigate")
-
-col1, col2 = st.columns([3, 1])
-
-with col1:
-    domains_input = st.text_area(
-        "🔍 Enter seed domains to investigate (one per line)",
-        value="breaking-truth-daily.com\nreal-news-network.net\npatriot-updates-now.com",
-        height=120,
-        help="Enter 2-5 domains. The system will crawl these and discover connected domains automatically. Minimum 2 domains recommended for meaningful graph analysis.",
-        placeholder="suspicious-news.com\nfake-updates.net\nbreaking-truth-daily.com"
+    analyze_clicked = st.button(
+        "🔍 Analyze Domains",
+        type="primary",
+        use_container_width=True,
+        disabled=len(domains) == 0,
     )
 
-with col2:
-    st.markdown("<br/>", unsafe_allow_html=True)
-    st.markdown("**Try these examples:**")
-    if st.button("🟢 Legit sites", use_container_width=True):
-        st.session_state['preset'] = "bbc.com\nreuters.com\nnytimes.com"
-    if st.button("🔴 Suspicious", use_container_width=True):
-        st.session_state['preset'] = "breaking-truth-daily.com\nreal-news-network.net\npatriot-updates-now.com"
+    # ── Run analysis ─────────────────────────────────
+    if analyze_clicked and domains:
+        progress = st.progress(0)
+        status = st.empty()
 
-if 'preset' in st.session_state:
-    domains_input = st.session_state.pop('preset')
+        steps = [
+            (10, "🕷️ Step 1/4: Crawler Agent crawling domains..."),
+            (30, "🔬 Step 2/4: Fingerprint Analyst computing signals..."),
+            (70, "🏗️ Step 3/4: Graph Builder updating Neo4j..."),
+            (90, "⚖️ Step 4/4: Verdict Agent running GNN inference..."),
+        ]
 
-raw_domains = [d.strip() for d in domains_input.strip().split('\n') if d.strip()]
-domains = raw_domains[:max_domains]
+        status.text(steps[0][1])
+        progress.progress(steps[0][0])
 
-if len(raw_domains) > max_domains:
-    st.warning(f"⚠️ Only analyzing first {max_domains} domains (adjust slider in sidebar)")
+        try:
+            status.text(steps[1][1])
+            progress.progress(steps[1][0])
 
-if len(domains) < 2:
-    st.info("💡 Tip: Enter at least 2 domains for meaningful network analysis")
+            with st.spinner("AI agents working... (1-3 minutes)"):
+                t0 = time.time()
+                resp = requests.post(
+                    f"{BACKEND_URL}/analyze",
+                    json={"domains": domains},
+                    timeout=180,
+                )
+                elapsed = time.time() - t0
 
-st.caption(f"Domains to analyze: **{', '.join(domains)}**")
+            for pct, msg in steps[2:]:
+                status.text(msg)
+                progress.progress(pct)
+                time.sleep(0.4)
 
-analyze_clicked = st.button(
-    "🔍 Analyze Domains",
-    type="primary",
-    use_container_width=True,
-    disabled=len(domains) == 0
-)
+            progress.progress(100)
+            status.empty()
+            progress.empty()
 
+            if resp.status_code != 200:
+                st.error(f"Analysis failed: {resp.text}")
+                st.stop()
 
-# ══════════════════════════════════════════════════════
-# ANALYSIS
-# ══════════════════════════════════════════════════════
+            result = resp.json()
+            st.success(f"✅ Analysis complete in {elapsed:.0f} seconds")
+            st.session_state["result"] = result
 
-if analyze_clicked and domains:
-    progress_bar = st.progress(0)
-    status_text  = st.empty()
+            failed = result.get("failed_domains", [])
+            if failed:
+                st.warning(
+                    f"{len(failed)} domain(s) could not be crawled: "
+                    f"**{', '.join(failed)}**"
+                )
 
-    status_text.text("🕷️ Step 1/4: Crawler Agent crawling domains...")
-    progress_bar.progress(10)
-
-    try:
-        status_text.text("🔬 Step 2/4: Fingerprint Analyst computing signals...")
-        progress_bar.progress(30)
-
-        with st.spinner("AI agents working... (1-3 minutes)"):
-            start_time = time.time()
-            response   = requests.post(
-                f"{BACKEND_URL}/analyze",
-                json={"domains": domains},
-                timeout=180
-            )
-            elapsed = time.time() - start_time
-
-        progress_bar.progress(70)
-        status_text.text("🏗️ Step 3/4: Graph Builder updating Neo4j...")
-        time.sleep(0.5)
-        progress_bar.progress(90)
-        status_text.text("⚖️ Step 4/4: Verdict Agent running GNN inference...")
-        time.sleep(0.5)
-        progress_bar.progress(100)
-        status_text.empty()
-        progress_bar.empty()
-
-        if response.status_code != 200:
-            st.error(f"❌ Analysis failed: {response.text}")
+        except requests.exceptions.Timeout:
+            progress.empty(); status.empty()
+            st.error("Request timed out. Try fewer domains.")
+            st.stop()
+        except requests.exceptions.ConnectionError:
+            progress.empty(); status.empty()
+            st.error(f"Cannot connect to backend at {BACKEND_URL}")
+            st.stop()
+        except Exception as e:
+            progress.empty(); status.empty()
+            st.error(f"Error: {e}")
             st.stop()
 
-        result = response.json()
-        st.success(f"✅ Analysis complete in {elapsed:.0f} seconds")
-        st.session_state['result'] = result
-        # Show failed domains warning
-        failed = result.get('failed_domains', [])
-        if failed:
-            st.warning(f"⚠️ {len(failed)} domain(s) could not be crawled and were excluded from analysis: **{', '.join(failed)}**")
+    # ── Show results ─────────────────────────────────
+    if "result" in st.session_state:
+        result = st.session_state["result"]
+        verdict = result.get("cluster_verdict", "UNKNOWN")
+        confidence = result.get("max_confidence", 0.0)
+        summary = result.get("summary", "")
+        domain_verdicts = result.get("domain_verdicts", {})
 
-    except requests.exceptions.Timeout:
-        progress_bar.empty()
-        status_text.empty()
-        st.error("❌ Request timed out. Try fewer domains.")
-        st.stop()
-    except requests.exceptions.ConnectionError:
-        progress_bar.empty()
-        status_text.empty()
-        st.error(f"❌ Cannot connect to backend at {BACKEND_URL}")
-        st.stop()
-    except Exception as e:
-        progress_bar.empty()
-        status_text.empty()
-        st.error(f"❌ Error: {str(e)}")
-        st.stop()
+        st.divider()
 
+        # Verdict badge
+        st.subheader("🎯 Verdict")
+        if verdict == "SYNTHETIC":
+            st.markdown(
+                f'<div class="verdict-synthetic">🚨 SYNTHETIC ECOSYSTEM DETECTED'
+                f'<br/><span style="font-size:16px">Confidence: {confidence:.0%}</span></div>',
+                unsafe_allow_html=True,
+            )
+        elif verdict == "REVIEW":
+            st.markdown(
+                f'<div class="verdict-review">⚠️ REVIEW RECOMMENDED'
+                f'<br/><span style="font-size:16px">Confidence: {confidence:.0%}</span></div>',
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown(
+                f'<div class="verdict-organic">✅ ORGANIC'
+                f'<br/><span style="font-size:16px">Confidence: {confidence:.0%}</span></div>',
+                unsafe_allow_html=True,
+            )
 
-# ══════════════════════════════════════════════════════
-# RESULTS
-# ══════════════════════════════════════════════════════
+        st.info(f"📋 {summary}")
 
-if 'result' in st.session_state:
-    result         = st.session_state['result']
-    verdict        = result.get('cluster_verdict', 'UNKNOWN')
-    confidence     = result.get('max_confidence', 0.0)
-    summary        = result.get('summary', '')
-    domain_verdicts = result.get('domain_verdicts', {})
+        # Metrics row
+        c1, c2, c3, c4 = st.columns(4)
+        with c1: st.metric("Domains Analyzed", result.get("domains_analyzed", 0))
+        with c2: st.metric("🔴 Synthetic", result.get("synthetic_domains", 0))
+        with c3: st.metric("🟡 Review", result.get("review_domains", 0))
+        with c4: st.metric("🟢 Organic", result.get("organic_domains", 0))
 
-    st.divider()
+        st.divider()
 
-    # ── Verdict badge ────────────────────────────────
-    st.subheader("🎯 Verdict")
+        # Result sub-tabs
+        r_tab1, r_tab2, r_tab3, r_tab4 = st.tabs([
+            "🕸️ Network Graph",
+            "📊 Signal Analysis",
+            "🤖 GPT-4 Analysis",
+            "📋 Domain Details",
+        ])
 
-    if verdict == 'SYNTHETIC':
-        st.markdown(
-            f'<div class="verdict-synthetic">🚨 SYNTHETIC ECOSYSTEM DETECTED<br/>'
-            f'<span style="font-size:16px">Confidence: {confidence:.0%}</span></div>',
-            unsafe_allow_html=True)
-    elif verdict == 'REVIEW':
-        st.markdown(
-            f'<div class="verdict-review">⚠️ REVIEW RECOMMENDED<br/>'
-            f'<span style="font-size:16px">Confidence: {confidence:.0%}</span></div>',
-            unsafe_allow_html=True)
-    else:
-        st.markdown(
-            f'<div class="verdict-organic">✅ ORGANIC<br/>'
-            f'<span style="font-size:16px">Confidence: {confidence:.0%}</span></div>',
-            unsafe_allow_html=True)
-
-    st.info(f"📋 {summary}")
-
-    # ── Metrics ──────────────────────────────────────
-    c1, c2, c3, c4 = st.columns(4)
-    with c1: st.metric("Domains Analyzed", result.get('domains_analyzed', 0))
-    with c2: st.metric("🔴 Synthetic", result.get('synthetic_domains', 0))
-    with c3: st.metric("🟡 Review", result.get('review_domains', 0))
-    with c4: st.metric("🟢 Organic", result.get('organic_domains', 0))
-
-    st.divider()
-
-    # ── Tabs ─────────────────────────────────────────
-    tab1, tab2, tab3, tab4 = st.tabs([
-        "🕸️ Network Graph",
-        "📊 Signal Analysis",
-        "🤖 GPT-4 Analysis",
-        "📋 Domain Details"
-    ])
-
-    # ── TAB 1: Network Graph ──────────────────────────
-    with tab1:
-        st.subheader("Domain Network Graph")
-        try:
-            graph_response = requests.get(f"{BACKEND_URL}/graph", timeout=15)
-            if graph_response.status_code == 200:
-                graph_data = graph_response.json()
-                nodes = graph_data.get('nodes', [])
-                edges = graph_data.get('edges', [])
-
+        # ── Network Graph ────────────────────────────
+        with r_tab1:
+            st.subheader("Domain Network Graph")
+            graph_data = api_get("/graph")
+            if graph_data:
+                nodes = graph_data.get("nodes", [])
+                edges = graph_data.get("edges", [])
                 if nodes:
                     n = len(nodes)
-                    node_x, node_y = [], []
-                    for i in range(n):
-                        angle = 2 * math.pi * i / max(n, 1)
-                        node_x.append(math.cos(angle))
-                        node_y.append(math.sin(angle))
+                    node_x = [math.cos(2 * math.pi * i / max(n, 1)) for i in range(n)]
+                    node_y = [math.sin(2 * math.pi * i / max(n, 1)) for i in range(n)]
+                    pos = {nodes[i]["id"]: (node_x[i], node_y[i]) for i in range(n)}
 
-                    node_positions = {
-                        nodes[i]['id']: (node_x[i], node_y[i])
-                        for i in range(n)
-                    }
+                    ex, ey = [], []
+                    for e in edges[:100]:
+                        s, t = pos.get(e["source"]), pos.get(e["target"])
+                        if s and t:
+                            ex += [s[0], t[0], None]
+                            ey += [s[1], t[1], None]
 
-                    edge_x, edge_y = [], []
-                    for edge in edges[:100]:
-                        src = node_positions.get(edge['source'])
-                        tgt = node_positions.get(edge['target'])
-                        if src and tgt:
-                            edge_x += [src[0], tgt[0], None]
-                            edge_y += [src[1], tgt[1], None]
-
-                    edge_trace = go.Scatter(
-                        x=edge_x, y=edge_y, mode='lines',
-                        line=dict(width=0.5, color='#444'),
-                        hoverinfo='none', name='Similarity edges'
-                    )
-
-                    color_map = {'SYNTHETIC': '#e74c3c', 'REVIEW': '#e67e22', 'ORGANIC': '#27ae60'}
-                    node_colors = [color_map.get(nd.get('verdict', 'ORGANIC'), '#888') for nd in nodes]
-
-                    node_trace = go.Scatter(
-                        x=node_x, y=node_y,
-                        mode='markers',
-                        hovertemplate=(
-                            '<b>%{customdata[0]}</b><br>'
-                            'Verdict: %{customdata[1]}<br>'
-                            'Signals: %{customdata[2]}<br>'
-                            '<extra></extra>'
-                        ),
-                        customdata=[[nd['domain'], nd.get('verdict','ORGANIC'), nd.get('signals',0)] for nd in nodes],
-                        marker=dict(size=10, color=node_colors, line=dict(width=1, color='#fff')),
-                        name='Domains'
-                    )
-
+                    cmap = {"SYNTHETIC": "#e74c3c", "REVIEW": "#e67e22", "ORGANIC": "#27ae60"}
                     fig = go.Figure(
-                        data=[edge_trace, node_trace],
+                        data=[
+                            go.Scatter(x=ex, y=ey, mode="lines",
+                                       line=dict(width=0.5, color="#444"),
+                                       hoverinfo="none"),
+                            go.Scatter(
+                                x=node_x, y=node_y, mode="markers",
+                                hovertemplate="<b>%{customdata[0]}</b><br>Verdict: %{customdata[1]}<br>Signals: %{customdata[2]}<extra></extra>",
+                                customdata=[[nd["domain"], nd.get("verdict", "ORGANIC"), nd.get("signals", 0)] for nd in nodes],
+                                marker=dict(size=10, color=[cmap.get(nd.get("verdict", "ORGANIC"), "#888") for nd in nodes],
+                                            line=dict(width=1, color="#fff")),
+                            ),
+                        ],
                         layout=go.Layout(
-                            title=dict(text=f'Domain Network — {len(nodes)} nodes, {len(edges)} edges', font=dict(color='#fff', size=14)),
-                            showlegend=False, hovermode='closest',
-                            paper_bgcolor='#0e1117', plot_bgcolor='#0e1117',
+                            showlegend=False, hovermode="closest",
+                            paper_bgcolor="#0e1117", plot_bgcolor="#0e1117",
                             xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
                             yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-                            height=500, margin=dict(l=20, r=20, t=40, b=20),
-                        )
+                            height=500, margin=dict(l=20, r=20, t=20, b=20),
+                        ),
                     )
                     st.plotly_chart(fig, use_container_width=True)
-                    st.caption("🔴 Synthetic  🟠 Review  🟢 Organic — hover over nodes for details")
+                    st.caption("🔴 Synthetic  🟠 Review  🟢 Organic — hover for details")
                 else:
                     st.info("Graph is empty — run an analysis first")
-        except Exception as e:
-            st.warning(f"Graph visualization unavailable: {str(e)}")
+            else:
+                st.warning("Graph visualization unavailable")
 
-    # ── TAB 2: Signal Analysis ────────────────────────
-    with tab2:
-        st.subheader("Signal Analysis Charts")
+        # ── Signal Analysis ──────────────────────────
+        with r_tab2:
+            st.subheader("Signal Analysis")
+            if domain_verdicts:
+                rows = []
+                for d, dv in domain_verdicts.items():
+                    rows.append({
+                        "Domain": d[:35],
+                        "Synthetic Prob": round(dv.get("confidence", 0), 4),
+                        "Signals": dv.get("signals_triggered", 0),
+                        "Verdict": dv.get("verdict", "ORGANIC"),
+                        "Similarity": dv.get("signal_1_similarity", 0),
+                        "Cadence": dv.get("signal_2_cadence", 0),
+                        "WHOIS": dv.get("signal_3_whois", 0),
+                    })
+                df_sig = pd.DataFrame(rows)
 
-        if domain_verdicts:
-            signal_data = []
-            for domain, dv in domain_verdicts.items():
-                signal_data.append({
-                    'Domain':                domain[:35],
-                    'Synthetic Probability': round(dv.get('confidence', 0), 4),
-                    'Signals Triggered':     dv.get('signals_triggered', 0),
-                    'Verdict':               dv.get('verdict', 'ORGANIC'),
-                    'Similarity':            dv.get('signal_1_similarity', 0),
-                    'Cadence':               dv.get('signal_2_cadence', 0),
-                    'WHOIS':                 dv.get('signal_3_whois', 0),
-                })
-            df_sig = pd.DataFrame(signal_data)
+                cmap = {"SYNTHETIC": "#e74c3c", "REVIEW": "#e67e22", "ORGANIC": "#27ae60"}
 
-            # Chart 1 — Synthetic probability
-            cmap = {'SYNTHETIC': '#e74c3c', 'REVIEW': '#e67e22', 'ORGANIC': '#27ae60'}
-            fig1 = px.bar(
-                df_sig, x='Domain', y='Synthetic Probability',
-                color='Verdict', color_discrete_map=cmap,
-                title='Synthetic Probability by Domain',
-            )
-            fig1.update_layout(
-                paper_bgcolor='#0e1117', plot_bgcolor='#0e1117',
-                font_color='#e0e0e0', xaxis_tickangle=-45,
-            )
-            st.plotly_chart(fig1, use_container_width=True)
+                fig1 = px.bar(df_sig, x="Domain", y="Synthetic Prob", color="Verdict",
+                              color_discrete_map=cmap, title="Synthetic Probability by Domain")
+                fig1.update_layout(paper_bgcolor="#0e1117", plot_bgcolor="#0e1117",
+                                   font_color="#e0e0e0", xaxis_tickangle=-45)
+                st.plotly_chart(fig1, use_container_width=True)
 
-            # Chart 2 — Signal heatmap
-            heat_df = df_sig[['Domain', 'Similarity', 'Cadence', 'WHOIS']].set_index('Domain')
-            fig2 = px.imshow(
-                heat_df.T,
-                color_continuous_scale=['#1a4a1a', '#e74c3c'],
-                title='Signal Heatmap — Red = Triggered',
-                aspect='auto',
-                labels=dict(color='Triggered'),
-            )
-            fig2.update_layout(
-                paper_bgcolor='#0e1117', plot_bgcolor='#0e1117',
-                font_color='#e0e0e0',
-            )
-            st.plotly_chart(fig2, use_container_width=True)
+                heat = df_sig[["Domain", "Similarity", "Cadence", "WHOIS"]].set_index("Domain")
+                fig2 = px.imshow(heat.T, color_continuous_scale=["#1a4a1a", "#e74c3c"],
+                                 title="Signal Heatmap — Red = Triggered", aspect="auto")
+                fig2.update_layout(paper_bgcolor="#0e1117", plot_bgcolor="#0e1117",
+                                   font_color="#e0e0e0")
+                st.plotly_chart(fig2, use_container_width=True)
 
-            # Summary stats
-            c1, c2, c3 = st.columns(3)
-            with c1:
-                st.metric("Avg Synthetic Probability",
-                          f"{df_sig['Synthetic Probability'].mean():.1%}")
-            with c2:
-                st.metric("Max Signals Triggered",
-                          f"{df_sig['Signals Triggered'].max()}/3")
-            with c3:
-                st.metric("Domains Above 50% Confidence",
-                          len(df_sig[df_sig['Synthetic Probability'] > 0.5]))
+                c1, c2, c3 = st.columns(3)
+                with c1: st.metric("Avg Synthetic Prob", f"{df_sig['Synthetic Prob'].mean():.1%}")
+                with c2: st.metric("Max Signals", f"{df_sig['Signals'].max()}/3")
+                with c3: st.metric("Above 50%", len(df_sig[df_sig["Synthetic Prob"] > 0.5]))
+                st.dataframe(df_sig, use_container_width=True)
 
-            # Data table
-            st.dataframe(df_sig, use_container_width=True)
+        # ── GPT-4 Analysis ───────────────────────────
+        with r_tab3:
+            st.subheader("🤖 GPT-4o AI Analysis")
+            if st.button("Generate AI Analysis", type="primary"):
+                with st.spinner("GPT-4o analyzing..."):
+                    try:
+                        from openai import OpenAI
+                        from dotenv import load_dotenv
+                        load_dotenv()
+                        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-    # ── TAB 3: GPT-4 Analysis ─────────────────────────
-    with tab3:
-        st.subheader("🤖 GPT-4o AI Analysis")
-        st.caption("Powered by OpenAI GPT-4o via CrewAI agents")
+                        domain_summary = "\n".join([
+                            f"- {d}: {v.get('verdict')} "
+                            f"(confidence={v.get('confidence',0):.0%}, "
+                            f"signals={v.get('signals_triggered',0)}/3)"
+                            for d, v in domain_verdicts.items()
+                        ])
+                        prompt = f"""Analyze this domain cluster assessment:
 
-        if st.button("Generate AI Analysis", type="primary"):
-            with st.spinner("GPT-4o analyzing the domain cluster..."):
-                try:
-                    from openai import OpenAI
-                    from dotenv import load_dotenv
-                    load_dotenv()
-
-                    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
-                    domain_summary = "\n".join([
-                        f"- {d}: {v.get('verdict')} "
-                        f"(confidence={v.get('confidence',0):.0%}, "
-                        f"signals={v.get('signals_triggered',0)}/3)"
-                        for d, v in domain_verdicts.items()
-                    ])
-
-                    prompt = f"""You are an expert in detecting coordinated inauthentic behavior on the internet.
-
-Analyze this domain cluster and provide a structured assessment:
-
-Domains analyzed:
+Domains:
 {domain_summary}
 
-Overall cluster verdict: {verdict}
-Maximum synthetic probability: {confidence:.0%}
+Overall: {verdict} at {confidence:.0%} confidence.
 
-Provide:
-1. What the signal pattern suggests about this network
-2. Whether this looks like organic or coordinated behavior and why
-3. Key indicators that influenced this assessment
-4. What a journalist or researcher should investigate next
+Provide: (1) what signal patterns suggest, (2) whether this looks organic or coordinated and why, (3) key indicators, (4) what to investigate next. Be concise."""
 
-Be concise, technical but accessible. Use bullet points."""
+                        resp = client.chat.completions.create(
+                            model="gpt-4o-mini",
+                            messages=[{"role": "user", "content": prompt}],
+                            max_tokens=350, temperature=0.3,
+                        )
+                        st.session_state["ai_analysis"] = resp.choices[0].message.content
+                    except Exception as e:
+                        st.error(f"AI analysis failed: {e}")
 
-                    response = client.chat.completions.create(
-                        model="gpt-4o-mini",
-                        messages=[{"role": "user", "content": prompt}],
-                        max_tokens=350,
-                        temperature=0.3,
-                    )
+            if "ai_analysis" in st.session_state:
+                st.markdown("### Assessment")
+                st.info(st.session_state["ai_analysis"])
+                st.caption("⚠️ AI analysis is advisory — always apply human judgment")
 
-                    ai_analysis = response.choices[0].message.content
-                    st.session_state['ai_analysis'] = ai_analysis
+        # ── Domain Details ───────────────────────────
+        with r_tab4:
+            st.subheader("Per-Domain Breakdown")
+            if domain_verdicts:
+                for d, dv in domain_verdicts.items():
+                    v = dv.get("verdict", "ORGANIC")
+                    icon = "🔴" if v == "SYNTHETIC" else "🟡" if v == "REVIEW" else "🟢"
+                    with st.expander(f"{icon} {d} — {v} ({dv.get('confidence',0):.0%})"):
+                        c1, c2, c3 = st.columns(3)
+                        with c1: st.metric("Similarity", "🚨 Triggered" if dv.get("signal_1_similarity") else "✅ Clear")
+                        with c2: st.metric("Cadence", "🚨 Triggered" if dv.get("signal_2_cadence") else "✅ Clear")
+                        with c3: st.metric("WHOIS", "🚨 Triggered" if dv.get("signal_3_whois") else "✅ Clear")
+                        st.info(f"💬 {dv.get('explanation', 'No explanation available')}")
 
-                except Exception as e:
-                    st.error(f"AI analysis failed: {str(e)}")
+        st.divider()
 
-        if 'ai_analysis' in st.session_state:
-            st.markdown("### GPT-4o Assessment")
-            st.info(st.session_state['ai_analysis'])
-            st.caption("⚠️ AI analysis is advisory only — always apply human judgment")
+        # Download report
+        report = {
+            "project": "Dead Internet Detector",
+            "analyzed_at": result.get("analyzed_at", ""),
+            "seed_domains": result.get("seed_domains", []),
+            "cluster_verdict": verdict,
+            "confidence": confidence,
+            "summary": summary,
+            "domain_verdicts": domain_verdicts,
+        }
+        st.download_button(
+            "📥 Download Full Report (JSON)",
+            data=json.dumps(report, indent=2),
+            file_name="dead_internet_report.json",
+            mime="application/json",
+            use_container_width=True,
+        )
 
-    # ── TAB 4: Domain Details ─────────────────────────
-    with tab4:
-        st.subheader("Per-Domain Breakdown")
+        with st.expander("🔧 Raw API Response"):
+            st.json(result)
 
-        if domain_verdicts:
-            for domain, dv in domain_verdicts.items():
-                v    = dv.get('verdict', 'ORGANIC')
-                icon = "🔴" if v == 'SYNTHETIC' else "🟡" if v == 'REVIEW' else "🟢"
 
-                with st.expander(f"{icon} {domain} — {v} (confidence: {dv.get('confidence',0):.0%})"):
-                    c1, c2, c3 = st.columns(3)
-                    with c1:
-                        s1 = dv.get('signal_1_similarity', 0)
-                        st.metric("Signal 1: Similarity", "🚨 Triggered" if s1 else "✅ Clear")
-                    with c2:
-                        s2 = dv.get('signal_2_cadence', 0)
-                        st.metric("Signal 2: Cadence", "🚨 Triggered" if s2 else "✅ Clear")
-                    with c3:
-                        s3 = dv.get('signal_3_whois', 0)
-                        st.metric("Signal 3: WHOIS", "🚨 Triggered" if s3 else "✅ Clear")
-                    st.info(f"💬 {dv.get('explanation', 'No explanation available')}")
-        else:
-            st.info("Run an analysis to see per-domain results")
+# ══════════════════════════════════════════════════════
+# TAB 2 — LIVE MONITOR DASHBOARD
+# ══════════════════════════════════════════════════════
+with tab_monitor:
 
-    st.divider()
-
-    # ── Download report ──────────────────────────────
-    st.subheader("📥 Download Report")
-    report = {
-        "project":         "Dead Internet Detector",
-        "analyzed_at":     result.get("analyzed_at", ""),
-        "seed_domains":    result.get("seed_domains", []),
-        "cluster_verdict": verdict,
-        "confidence":      confidence,
-        "summary":         summary,
-        "domain_verdicts": domain_verdicts,
-        "graph_stats":     result.get("graph_stats", {}),
-    }
-    st.download_button(
-        label="📥 Download Full Report (JSON)",
-        data=json.dumps(report, indent=2),
-        file_name="dead_internet_report.json",
-        mime="application/json",
-        use_container_width=True,
+    st.subheader("📡 Live Monitor Dashboard")
+    st.caption(
+        "The monitor ingests newly registered domains (WHOISDS) and "
+        "domains shared on Reddit, then runs them through the same "
+        "detection pipeline automatically."
     )
 
     st.divider()
 
-    # ── Raw JSON ─────────────────────────────────────
-    with st.expander("🔧 Raw API Response (for debugging)"):
-        st.json(result)
+    # ── Feed status cards ────────────────────────────
+    st.markdown("### Feed Status")
+    feed = api_get("/feed-status")
+    latest = feed.get("latest") if feed else None
+
+    col_w, col_r, col_q, col_b = st.columns(4)
+
+    if latest:
+        whoisds_n = latest.get("whoisds_count", 0)
+        reddit_n = latest.get("reddit_count", 0)
+        queued_n = latest.get("queued_unique", 0)
+        batches_n = latest.get("batches", 0)
+        syn_batches = latest.get("synthetic_batches", 0)
+        ran_at = latest.get("ran_at", "never")
+
+        with col_w:
+            st.metric("WHOISDS Domains", whoisds_n,
+                       help="Newly registered domains from WHOISDS feed")
+            if whoisds_n == 0:
+                st.caption("⚠️ Feed not configured")
+            else:
+                st.caption("✅ Feed active")
+
+        with col_r:
+            st.metric("Reddit Domains", reddit_n,
+                       help="Domains extracted from Reddit posts")
+            st.caption("✅ Feed active" if reddit_n > 0 else "⚠️ No domains found")
+
+        with col_q:
+            st.metric("Queued for Analysis", queued_n,
+                       help="Unique domains sent to the detection pipeline")
+
+        with col_b:
+            st.metric("Synthetic Batches", f"{syn_batches}/{batches_n}",
+                       help="Batches where synthetic content was detected")
+
+        # Last run timestamp
+        try:
+            from datetime import datetime
+            dt = datetime.fromisoformat(ran_at.replace("Z", "+00:00"))
+            nice_time = dt.strftime("%b %d, %Y at %H:%M UTC")
+        except Exception:
+            nice_time = ran_at
+        st.caption(f"Last monitor run: **{nice_time}**")
+
+    else:
+        with col_w: st.metric("WHOISDS Domains", "—")
+        with col_r: st.metric("Reddit Domains", "—")
+        with col_q: st.metric("Queued", "—")
+        with col_b: st.metric("Synthetic", "—")
+        st.info("No monitor runs yet. Click **Run Monitor Cycle** below to start.")
+
+    st.divider()
+
+    # ── Timeline chart ───────────────────────────────
+    st.markdown("### Monitor Run Timeline")
+    timeline_data = api_get("/timeline?limit=20")
+    timeline = timeline_data.get("timeline", []) if timeline_data else []
+
+    if timeline and len(timeline) >= 1:
+        df_tl = pd.DataFrame(timeline)
+        if "ran_at" in df_tl.columns:
+            # Parse timestamps — handle both timezone-aware and naive formats
+            df_tl["ran_at"] = pd.to_datetime(df_tl["ran_at"], utc=True, errors="coerce")
+            df_tl = df_tl.dropna(subset=["ran_at"])
+            df_tl = df_tl.sort_values("ran_at")
+
+            # Rename columns for readable legend
+            rename_map = {}
+            if "queued_unique" in df_tl.columns:
+                rename_map["queued_unique"] = "Queued"
+            if "reddit_count" in df_tl.columns:
+                rename_map["reddit_count"] = "Reddit"
+            if "whoisds_count" in df_tl.columns:
+                rename_map["whoisds_count"] = "WHOISDS"
+            if "synthetic_batches" in df_tl.columns:
+                rename_map["synthetic_batches"] = "Synthetic Batches"
+            df_tl = df_tl.rename(columns=rename_map)
+
+            y_cols = [c for c in ["Queued", "Reddit", "WHOISDS", "Synthetic Batches"] if c in df_tl.columns]
+
+            if not df_tl.empty and y_cols:
+                fig_tl = px.line(
+                    df_tl, x="ran_at", y=y_cols,
+                    title="Domains Ingested & Analyzed Over Time",
+                    markers=True,
+                    color_discrete_sequence=["#3498db", "#e74c3c", "#e67e22", "#9b59b6"],
+                )
+                fig_tl.update_layout(
+                    paper_bgcolor="#0e1117", plot_bgcolor="#0e1117",
+                    font_color="#e0e0e0",
+                    legend_title_text="",
+                    xaxis_title="Time",
+                    xaxis=dict(type="date", tickformat="%b %d %H:%M"),
+                    yaxis_title="Count",
+                    height=350,
+                )
+                st.plotly_chart(fig_tl, use_container_width=True)
+            else:
+                st.info("Timeline data could not be parsed. Run more monitor cycles to populate.")
+    else:
+        st.info("No timeline data yet. Run a monitor cycle to start collecting data points.")
+
+    st.divider()
+
+    # ── Monitor controls ─────────────────────────────
+    st.markdown("### Run Monitor")
+    st.caption(
+        "Each cycle fetches fresh domains from Reddit (and WHOISDS if configured), "
+        "then analyzes them in batches of 10 through the full detection pipeline."
+    )
+
+    col_start, col_poll = st.columns(2)
+
+    # Initialize session state
+    if "monitor_job_id" not in st.session_state:
+        st.session_state["monitor_job_id"] = None
+    if "monitor_status" not in st.session_state:
+        st.session_state["monitor_status"] = None
+
+    with col_start:
+        if st.button("▶️ Start Monitor Cycle", use_container_width=True, type="primary"):
+            try:
+                r = requests.post(f"{BACKEND_URL}/monitor/start", timeout=20)
+                if r.status_code == 200:
+                    job_id = r.json().get("job_id", "")
+                    st.session_state["monitor_job_id"] = job_id
+                    st.session_state["monitor_status"] = "running"
+                    st.success(f"Monitor started — Job ID: `{job_id[:12]}...`")
+                else:
+                    st.error(f"Failed to start: {r.text}")
+            except Exception as e:
+                st.error(f"Connection error: {e}")
+
+    with col_poll:
+        if st.button("🔄 Check Job Status", use_container_width=True):
+            st.rerun()
+
+    # Show job result
+    job_id = st.session_state.get("monitor_job_id")
+    if job_id:
+        job = api_get(f"/monitor/job/{job_id}")
+        if job:
+            status = job.get("status", "unknown")
+
+            if status in ("queued", "running"):
+                st.warning(f"⏳ Job `{job_id[:12]}...` is **{status}**. Click 'Check Job Status' to refresh.")
+
+            elif status == "completed":
+                st.session_state["monitor_status"] = "completed"
+                st.success(f"✅ Job `{job_id[:12]}...` completed!")
+
+                s = job.get("summary", {})
+                mc1, mc2, mc3, mc4 = st.columns(4)
+                with mc1: st.metric("Reddit Domains", s.get("reddit_count", 0))
+                with mc2: st.metric("WHOISDS Domains", s.get("whoisds_count", 0))
+                with mc3: st.metric("Queued", s.get("queued_unique", 0))
+                with mc4: st.metric("Synthetic Batches", s.get("synthetic_batches", 0))
+
+            elif status == "failed":
+                st.session_state["monitor_status"] = "failed"
+                st.error(f"❌ Job failed: {job.get('error', 'unknown')}")
+                tb = job.get("traceback")
+                if tb:
+                    with st.expander("Error details"):
+                        st.code(tb)
+        else:
+            st.info("Job status unavailable — backend may have restarted.")
+
+    st.divider()
+
+    # ── How monitoring works ─────────────────────────
+    with st.expander("ℹ️ How does the monitor work?"):
+        st.markdown("""
+        **Data Sources:**
+        - **Reddit** — Scans r/worldnews, r/conspiracy, r/politics, r/news for external domain links
+        - **WHOISDS** — Fetches newly registered domains with suspicious TLDs (.xyz, .top, .click, etc.)
+
+        **Pipeline:**
+        1. Domains from both feeds are merged and deduplicated
+        2. Up to 40 unique domains are queued per cycle
+        3. Domains are split into batches of 10
+        4. Each batch runs through the full 4-agent analysis pipeline
+        5. Results are logged to `data/monitor_runs.jsonl`
+
+        **Scheduling:**
+        - Manual: Click "Start Monitor Cycle" above
+        - Automatic: Run `python -m pipeline.schedule_monitor` (every 6 hours by default)
+        """)
+
+    # ── About section ────────────────────────────────
+    with st.expander("ℹ️ About This Project"):
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("""
+            **The Dead Internet Detector** detects coordinated synthetic content
+            ecosystems — networks of fake websites designed to manipulate search
+            rankings and public opinion.
+
+            Unlike tools that check individual articles, this system asks the
+            **network-level question**: is this entire corner of the internet
+            artificially coordinated?
+            """)
+        with col2:
+            st.markdown("""
+            **Tech Stack:**
+            - **CrewAI** — 4 agents in sequence
+            - **GPT-4o** — agent reasoning
+            - **Graph Neural Network** — domain classification
+            - **Neo4j AuraDB** — graph database
+            - **Sentence Transformers** — content embeddings
+            - **Isolation Forest** — cadence anomaly detection
+
+            **Ethical Guidelines:**
+            Research and journalism only. Human review required.
+            2-of-3 signals required. No personal data collected.
+            """)
