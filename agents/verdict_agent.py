@@ -1,6 +1,7 @@
 # agents/verdict_agent.py
 # Agent 4 — Verdict Agent
 # Runs GNN inference and produces final verdict with explanation
+# Confidence is computed from actual signal strength, not just GNN output
 
 import os
 import json
@@ -13,7 +14,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 MODEL_PATH  = "models/gnn_model.pt"
-THRESHOLD   = 0.5   # confidence threshold
+THRESHOLD   = 0.5
 
 
 # ── Re-define GNN architecture ───────────────────────
@@ -48,7 +49,7 @@ class GCN(nn.Module):
 
 def load_gnn_model():
     """Load the trained GNN model from disk."""
-    checkpoint    = torch.load(MODEL_PATH, map_location='cpu')
+    checkpoint    = torch.load(MODEL_PATH, map_location='cpu', weights_only=False)
     feature_cols  = checkpoint['feature_cols']
     n_features    = checkpoint['n_features']
     scaler_mean   = np.array(checkpoint['scaler_mean'])
@@ -67,10 +68,8 @@ def build_graph_tensors(features: dict, sim_edges: dict):
     domain_to_idx = {d: i for i, d in enumerate(domain_list)}
     n_nodes       = len(domain_list)
 
-    # Load model to get feature column order
     _, feature_cols, scaler_mean, scaler_scale = load_gnn_model()
 
-    # Build feature matrix
     X = []
     for domain in domain_list:
         feats = features[domain]
@@ -78,10 +77,10 @@ def build_graph_tensors(features: dict, sim_edges: dict):
         X.append(row)
 
     X = np.array(X, dtype=np.float32)
-    X = (X - scaler_mean) / scaler_scale
+    safe_scale = np.where(scaler_scale == 0, 1.0, scaler_scale)
+    X = (X - scaler_mean) / safe_scale
     X_tensor = torch.tensor(X, dtype=torch.float32)
 
-    # Build edge index
     edge_src, edge_dst = [], []
     for key in sim_edges:
         if "|||" in str(key):
@@ -95,7 +94,6 @@ def build_graph_tensors(features: dict, sim_edges: dict):
             edge_src.extend([i, j])
             edge_dst.extend([j, i])
 
-    # Self-loops
     for i in range(n_nodes):
         edge_src.append(i)
         edge_dst.append(i)
@@ -105,7 +103,44 @@ def build_graph_tensors(features: dict, sim_edges: dict):
     return X_tensor, edge_index, n_nodes, domain_list
 
 
-def generate_explanation(domain: str, feats: dict, prob: float) -> str:
+def compute_confidence(feats: dict, syn_prob: float) -> float:
+    """
+    Compute a meaningful confidence score from actual signals.
+    
+    Instead of relying solely on the GNN (which overfits on small data),
+    we combine signal strength with similarity scores for a more 
+    honest confidence estimate.
+    
+    Returns: float between 0.0 and 0.99
+    """
+    signals = int(feats.get('signals_triggered', 0))
+    max_sim = float(feats.get('max_similarity', 0))
+    burst   = float(feats.get('burst_score', 0))
+    
+    # Base confidence from number of signals triggered
+    # 0 signals = 0.0, 1 signal = 0.33, 2 signals = 0.67, 3 signals = 1.0
+    signal_confidence = signals / 3.0
+    
+    # Similarity contribution (0 to 0.15)
+    # Higher similarity = more suspicious
+    sim_boost = min(max_sim * 0.3, 0.15)
+    
+    # Cadence anomaly contribution (0 to 0.1)
+    cadence_boost = min(burst * 0.2, 0.1)
+    
+    # GNN contribution (small weight — model has limited generalization)
+    gnn_boost = syn_prob * 0.05
+    
+    # Combined confidence
+    confidence = signal_confidence + sim_boost + cadence_boost + gnn_boost
+    
+    # Clamp between 0.02 and 0.97 (never show 0% or 100%)
+    confidence = max(0.02, min(confidence, 0.97))
+    
+    return round(confidence, 2)
+
+
+def generate_explanation(domain: str, feats: dict, confidence: float) -> str:
     """Generate plain-English explanation for the verdict."""
     reasons = []
 
@@ -125,16 +160,17 @@ def generate_explanation(domain: str, feats: dict, prob: float) -> str:
     if not reasons:
         return (f"{domain} shows no suspicious patterns across all 3 signals. "
                 f"Content similarity, publishing cadence, and registration data "
-                f"all appear organic.")
+                f"all appear organic. Confidence: {confidence:.0%}.")
 
     signals = feats.get('signals_triggered', 0)
     return (
         f"{domain} triggered {signals}/3 signals: "
         + "; ".join(reasons) + ". "
-        + (f"With {signals} signals converging and GNN confidence {prob:.0%}, "
-           f"the 2-of-3 rule requires verdict escalation."
+        + (f"With {signals} signals converging (confidence {confidence:.0%}), "
+           f"the 2-of-3 rule classifies this as synthetic."
            if signals >= 2 else
-           f"Single signal — flagged for human review only.")
+           f"Single signal detected (confidence {confidence:.0%}) — "
+           f"flagged for human review.")
     )
 
 
@@ -142,13 +178,14 @@ def produce_verdict(features: dict, sim_edges: dict) -> dict:
     """
     Main verdict function.
     Runs GNN inference and produces final verdict for all domains.
-
-    Args:
-        features: dict of domain → feature scores from Fingerprint Analyst
-        sim_edges: dict of domain pair → similarity score
-
-    Returns:
-        dict with verdict, confidence, signals, explanation per domain
+    
+    Verdict logic (2-of-3 rule):
+    - SYNTHETIC: 2 or more signals triggered
+    - REVIEW: exactly 1 signal triggered
+    - ORGANIC: no signals triggered
+    
+    Confidence is computed from signal strength + similarity scores,
+    not solely from GNN output (which overfits on small training data).
     """
     print(f"⚖️  Verdict Agent starting...")
     print(f"   Domains to evaluate: {len(features)}")
@@ -157,16 +194,14 @@ def produce_verdict(features: dict, sim_edges: dict) -> dict:
         return {'error': 'No domain features provided', 'verdicts': {}}
 
     try:
-        # Load model
         model, feature_cols, scaler_mean, scaler_scale = load_gnn_model()
         print(f"   ✅ GNN model loaded")
 
-        # Build tensors
         X_tensor, edge_index, n_nodes, domain_list = build_graph_tensors(
             features, sim_edges
         )
 
-        # Run inference
+        # Run GNN inference (used as one input to confidence)
         with torch.no_grad():
             out  = model(X_tensor, edge_index, n_nodes)
             prob = F.softmax(out, dim=1)
@@ -174,39 +209,43 @@ def produce_verdict(features: dict, sim_edges: dict) -> dict:
 
         print(f"   ✅ GNN inference complete")
 
-        # Build verdict per domain
         verdicts = {}
         for i, domain in enumerate(domain_list):
-            feats        = features[domain]
-            syn_prob     = float(synthetic_probs[i])
-            signals      = int(feats.get('signals_triggered', 0))
+            feats    = features[domain]
+            syn_prob = float(synthetic_probs[i])
+            signals  = int(feats.get('signals_triggered', 0))
 
-            # 2-of-3 rule
-            if syn_prob >= THRESHOLD and signals >= 2:
+            # Compute real confidence from signals + features
+            confidence = compute_confidence(feats, syn_prob)
+
+            # Verdict based on 2-of-3 rule
+            if signals >= 2:
                 verdict = 'SYNTHETIC'
-            elif syn_prob >= THRESHOLD and signals == 1:
-                verdict = 'REVIEW'
-            elif signals >= 2:
+            elif signals == 1:
                 verdict = 'REVIEW'
             else:
                 verdict = 'ORGANIC'
+                # For organic domains, show confidence in organic verdict
+                # (flip: low synthetic confidence = high organic confidence)
+                confidence = round(1.0 - confidence, 2)
+                confidence = max(0.55, min(confidence, 0.97))
 
-            explanation = generate_explanation(domain, feats, syn_prob)
+            explanation = generate_explanation(domain, feats, confidence)
 
             verdicts[domain] = {
-                'verdict':           verdict,
-                'confidence':        round(syn_prob, 4),
-                'signals_triggered': signals,
+                'verdict':             verdict,
+                'confidence':          confidence,
+                'gnn_raw_score':       round(syn_prob, 4),
+                'signals_triggered':   signals,
                 'signal_1_similarity': int(feats.get('similarity_flag', 0)),
                 'signal_2_cadence':    int(feats.get('cadence_flagged', 0)),
                 'signal_3_whois':      int(feats.get('whois_flagged', 0)),
-                'explanation':       explanation,
+                'explanation':         explanation,
             }
 
-        # Summary verdict for the whole cluster
         synthetic_count = sum(1 for v in verdicts.values() if v['verdict'] == 'SYNTHETIC')
         review_count    = sum(1 for v in verdicts.values() if v['verdict'] == 'REVIEW')
-        max_confidence  = max(v['confidence'] for v in verdicts.values())
+        max_confidence  = max(v['confidence'] for v in verdicts.values()) if verdicts else 0
 
         if synthetic_count > 0:
             cluster_verdict = 'SYNTHETIC'
@@ -216,17 +255,25 @@ def produce_verdict(features: dict, sim_edges: dict) -> dict:
             cluster_verdict = 'ORGANIC'
 
         result = {
-            'cluster_verdict':  cluster_verdict,
-            'max_confidence':   round(max_confidence, 4),
+            'cluster_verdict':   cluster_verdict,
+            'max_confidence':    round(max_confidence, 4),
             'synthetic_domains': synthetic_count,
-            'review_domains':   review_count,
-            'organic_domains':  len(verdicts) - synthetic_count - review_count,
-            'domain_verdicts':  verdicts,
+            'review_domains':    review_count,
+            'organic_domains':   len(verdicts) - synthetic_count - review_count,
+            'domain_verdicts':   verdicts,
         }
 
         print(f"✅ Verdict Agent complete!")
         print(f"   Cluster verdict: {cluster_verdict}")
-        print(f"   Max confidence:  {max_confidence:.3f}")
+        print(f"   Max confidence:  {max_confidence:.2%}")
+        
+        # Print per-domain summary
+        for domain, v in verdicts.items():
+            icon = "🔴" if v['verdict'] == 'SYNTHETIC' else "🟡" if v['verdict'] == 'REVIEW' else "🟢"
+            print(f"   {icon} {domain}: {v['verdict']} "
+                  f"(conf={v['confidence']:.0%}, signals={v['signals_triggered']}, "
+                  f"gnn={v['gnn_raw_score']:.2f})")
+        
         return result
 
     except Exception as e:
@@ -243,7 +290,6 @@ def produce_verdict_tool(input_json: str) -> str:
     return json.dumps(result)
 
 
-# ── Standalone test ──────────────────────────────────
 if __name__ == "__main__":
     import sys
     sys.path.insert(0, '.')
@@ -251,8 +297,6 @@ if __name__ == "__main__":
     from agents.fingerprint_agent import analyze_domains
 
     print("Testing Verdict Agent...")
-    print()
-
     data     = crawl_domains(["example.com", "bbc.com"])
     analysis = analyze_domains(data)
     verdict  = produce_verdict(
@@ -263,8 +307,6 @@ if __name__ == "__main__":
     print()
     print("Cluster verdict:", verdict['cluster_verdict'])
     print("Max confidence: ", verdict['max_confidence'])
-    print()
     for domain, v in verdict['domain_verdicts'].items():
-        print(f"  {domain}: {v['verdict']} (conf={v['confidence']:.3f})")
-    print()
-    print("🎉 Verdict Agent test passed!")
+        print(f"  {domain}: {v['verdict']} (conf={v['confidence']:.0%}, signals={v['signals_triggered']})")
+    print("\n🎉 Verdict Agent test passed!")

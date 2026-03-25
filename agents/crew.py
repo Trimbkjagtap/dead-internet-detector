@@ -6,7 +6,7 @@ import sys
 import json
 sys.path.insert(0, '.')
 
-from agents.crawler_agent      import crawl_domains
+from agents.crawler_agent      import crawl_domains, get_failed_domains
 from agents.fingerprint_agent  import analyze_domains
 from agents.graph_builder_agent import build_graph
 from agents.verdict_agent      import produce_verdict
@@ -27,6 +27,7 @@ def run_analysis(seed_domains: list) -> dict:
         - domain_verdicts: per-domain breakdown
         - graph_stats: Neo4j graph statistics
         - summary: plain-English summary
+        - failed_domains: list of domains that couldn't be crawled
     """
     print("=" * 55)
     print("🕸️  Dead Internet Detector — Full Pipeline")
@@ -40,14 +41,20 @@ def run_analysis(seed_domains: list) -> dict:
     print("━" * 40)
     crawled_data = crawl_domains(seed_domains)
 
+    # Get failed domains for reporting
+    failed = get_failed_domains()
+
     if not crawled_data:
         return {
             'cluster_verdict': 'ERROR',
             'error': 'Crawler returned no data — check internet connection',
             'seed_domains': seed_domains,
+            'failed_domains': failed,
         }
 
     print(f"  Crawled {len(crawled_data)} domains successfully")
+    if failed:
+        print(f"  ⚠️ Failed to crawl: {', '.join(failed)}")
     print()
 
     # ── AGENT 2: Compute signals ────────────────────
@@ -105,6 +112,10 @@ def run_analysis(seed_domains: list) -> dict:
             f"Maximum synthetic probability: {conf:.0%}."
         )
 
+    # Add failed domain info to summary
+    if failed:
+        summary += f" Note: {len(failed)} domain(s) could not be crawled: {', '.join(failed)}."
+
     final_result = {
         'cluster_verdict':   cluster,
         'max_confidence':    conf,
@@ -116,6 +127,7 @@ def run_analysis(seed_domains: list) -> dict:
         'summary':           summary,
         'seed_domains':      seed_domains,
         'domains_analyzed':  len(features),
+        'failed_domains':    failed,
     }
 
     # ── Print final summary ─────────────────────────
@@ -125,6 +137,8 @@ def run_analysis(seed_domains: list) -> dict:
     print(f"Verdict:    {cluster}")
     print(f"Confidence: {conf:.3f}")
     print(f"Summary:    {summary}")
+    if failed:
+        print(f"Failed:     {', '.join(failed)}")
     print()
     print("Per-domain breakdown:")
     for domain, v in verdict.get('domain_verdicts', {}).items():
@@ -139,7 +153,6 @@ def run_analysis(seed_domains: list) -> dict:
 
 # ── Standalone test ──────────────────────────────────
 if __name__ == "__main__":
-    # Test with a mix of legitimate and potentially suspicious domains
     test_domains = ["example.com", "bbc.com", "wikipedia.org"]
 
     print("Running full pipeline test...")
@@ -149,7 +162,6 @@ if __name__ == "__main__":
 
     print()
     print("Full result JSON:")
-    # Print without domain_verdicts for cleaner output
     summary_result = {k: v for k, v in result.items()
                       if k != 'domain_verdicts'}
     print(json.dumps(summary_result, indent=2))

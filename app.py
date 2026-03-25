@@ -235,6 +235,10 @@ if analyze_clicked and domains:
         result = response.json()
         st.success(f"✅ Analysis complete in {elapsed:.0f} seconds")
         st.session_state['result'] = result
+        # Show failed domains warning
+        failed = result.get('failed_domains', [])
+        if failed:
+            st.warning(f"⚠️ {len(failed)} domain(s) could not be crawled and were excluded from analysis: **{', '.join(failed)}**")
 
     except requests.exceptions.Timeout:
         progress_bar.empty()

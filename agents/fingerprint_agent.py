@@ -1,6 +1,7 @@
 # agents/fingerprint_agent.py
 # Agent 2 — Fingerprint Analyst Agent
 # Takes crawled domain data, computes all 3 signals
+# Excludes subdomain-to-parent comparisons from similarity
 
 import json
 import numpy as np
@@ -10,9 +11,9 @@ from sklearn.ensemble import IsolationForest
 from sentence_transformers import SentenceTransformer
 
 # ── Config ───────────────────────────────────────────
-MODEL_NAME       = "all-MiniLM-L6-v2"
-SIM_THRESHOLD    = 0.85   # Signal 1 flag threshold
-CADENCE_THRESHOLD = -0.1  # Signal 2 flag threshold
+MODEL_NAME        = "all-MiniLM-L6-v2"
+SIM_THRESHOLD     = 0.45    # Signal 1 flag threshold
+CADENCE_THRESHOLD = -0.1    # Signal 2 flag threshold
 
 # Load model once at module level (cached after first load)
 _model = None
@@ -26,66 +27,91 @@ def get_model():
     return _model
 
 
+def get_parent_domain(domain: str) -> str:
+    """Extract parent domain from subdomain."""
+    parts = domain.split('.')
+    if len(parts) >= 3 and parts[-2] in ['co', 'com', 'org', 'net', 'gov']:
+        return '.'.join(parts[-3:])
+    elif len(parts) >= 2:
+        return '.'.join(parts[-2:])
+    return domain
+
+
+def is_same_site(domain_a: str, domain_b: str) -> bool:
+    """
+    Check if two domains are from the same site.
+    e.g. bostonglobe.com and sponsored.bostonglobe.com are the same site.
+    e.g. twitter.com and x.com are different sites (handled by redirect detection).
+    """
+    return get_parent_domain(domain_a) == get_parent_domain(domain_b)
+
+
 def compute_signal1_similarity(domains_data: list) -> dict:
     """
     Signal 1: Content similarity using Sentence Transformers.
-    Returns dict mapping domain pairs to similarity scores.
+    Excludes subdomain-to-parent comparisons to avoid false positives.
     """
     print("  📐 Computing Signal 1 (content similarity)...")
 
+    if len(domains_data) < 2:
+        return {'domain_scores': {}, 'edges': {}}
+
     model   = get_model()
+    texts   = [d.get('text', '')[:1000] for d in domains_data]
     domains = [d['domain'] for d in domains_data]
-    texts   = [d.get('text', '') or '' for d in domains_data]
-
-    # Filter out empty texts
-    valid = [(d, t) for d, t in zip(domains, texts) if len(t) > 50]
-    if len(valid) < 2:
-        print("  ⚠️  Not enough text content for similarity")
-        return {}
-
-    valid_domains = [v[0] for v in valid]
-    valid_texts   = [v[1] for v in valid]
 
     # Compute embeddings
-    embeddings = model.encode(valid_texts, show_progress_bar=False)
+    embeddings = model.encode(texts, show_progress_bar=False)
 
     # Compute pairwise cosine similarity
     sim_matrix = cosine_similarity(embeddings)
 
-    # Build similarity dict for pairs above threshold
-    sim_edges = {}
-    for i in range(len(valid_domains)):
-        for j in range(i + 1, len(valid_domains)):
-            score = float(sim_matrix[i][j])
-            if score >= 0.5:  # save all edges >= 0.5
-                pair = (valid_domains[i], valid_domains[j])
-                sim_edges[pair] = round(score, 4)
+    # Build edges and per-domain scores
+    edges         = {}
+    domain_scores = {}
 
-    # Per-domain stats
-    domain_sim = {}
-    for domain in valid_domains:
-        scores = []
-        for (a, b), score in sim_edges.items():
-            if a == domain or b == domain:
-                scores.append(score)
-        domain_sim[domain] = {
-            'avg_similarity':  round(float(np.mean(scores)), 4) if scores else 0.0,
-            'max_similarity':  round(float(max(scores)), 4) if scores else 0.0,
-            'similarity_flag': 1 if scores and max(scores) >= SIM_THRESHOLD else 0,
+    for i in range(len(domains)):
+        similarities = []
+        flagged_pairs = []
+
+        for j in range(len(domains)):
+            if i == j:
+                continue
+
+            # Skip same-site comparisons (subdomains of same parent)
+            if is_same_site(domains[i], domains[j]):
+                continue
+
+            sim = float(sim_matrix[i][j])
+            similarities.append(sim)
+
+            if sim >= SIM_THRESHOLD:
+                pair = tuple(sorted([domains[i], domains[j]]))
+                if pair not in edges:
+                    edges[pair] = round(sim, 4)
+                flagged_pairs.append((domains[j], sim))
+
+        avg_sim = float(np.mean(similarities)) if similarities else 0.0
+        max_sim = float(max(similarities)) if similarities else 0.0
+
+        domain_scores[domains[i]] = {
+            'avg_similarity':      round(avg_sim, 4),
+            'max_similarity':      round(max_sim, 4),
+            'similarity_flag':     1 if max_sim >= SIM_THRESHOLD else 0,
+            'similar_domain_count': len(flagged_pairs),
         }
 
-    print(f"  ✅ Signal 1: {len(sim_edges)} similar pairs found")
-    return {'edges': sim_edges, 'domain_scores': domain_sim}
+    flagged = sum(1 for v in domain_scores.values() if v['similarity_flag'] == 1)
+    print(f"  ✅ Signal 1: {len(edges)} similar pairs found, {flagged} domains flagged")
+
+    return {'domain_scores': domain_scores, 'edges': edges}
 
 
 def compute_signal2_cadence(domains_data: list) -> dict:
     """
-    Signal 2: Publishing cadence anomaly using Isolation Forest.
-    Returns dict mapping domain to cadence features + anomaly score.
+    Signal 2: Publishing cadence anomaly detection using Isolation Forest.
     """
     print("  ⏰ Computing Signal 2 (cadence anomaly)...")
-
-    from collections import Counter
 
     cadence_features = []
     domain_names     = []
@@ -102,11 +128,13 @@ def compute_signal2_cadence(domains_data: list) -> dict:
         except:
             hour = minute = dow = 0
 
-        cadence_features.append([hour, minute, dow, 1])
+        text_len = len(d.get('text', ''))
+        has_links = 1 if d.get('links', '') else 0
+
+        cadence_features.append([hour, minute, dow, text_len, has_links])
         domain_names.append(domain)
 
     if len(cadence_features) < 3:
-        # Not enough data for Isolation Forest
         result = {}
         for domain in domain_names:
             result[domain] = {
@@ -117,7 +145,8 @@ def compute_signal2_cadence(domains_data: list) -> dict:
         return result
 
     X   = np.array(cadence_features, dtype=float)
-    clf = IsolationForest(n_estimators=50, contamination=0.1, random_state=42)
+    contamination = min(0.3, max(0.1, 1.0 / len(cadence_features)))
+    clf = IsolationForest(n_estimators=50, contamination=contamination, random_state=42)
     clf.fit(X)
     scores      = clf.decision_function(X)
     predictions = clf.predict(X)
@@ -137,26 +166,42 @@ def compute_signal2_cadence(domains_data: list) -> dict:
 
 def compute_signal3_whois(domains_data: list) -> dict:
     """
-    Signal 3: Basic domain age estimation from URL patterns.
-    (Full WHOIS disabled to preserve free tier quota)
-    Returns dict mapping domain to whois features.
+    Signal 3: Domain registration pattern analysis.
+    Flags domains with suspicious naming patterns and TLDs.
     """
     print("  🔍 Computing Signal 3 (domain features)...")
 
+    suspicious_tlds = ['.xyz', '.top', '.click', '.online', '.site', '.info', '.buzz', '.icu']
+
+    suspicious_keywords = [
+        'truth', 'patriot', 'freedom', 'liberty', 'alert', 'insider',
+        'expose', 'breaking', 'real-news', 'updates-now', 'daily-truth',
+        'peoples-voice', 'wire', 'report', 'first-news', 'national-alert'
+    ]
+
     result = {}
     for d in domains_data:
-        domain = d['domain']
-        # Use heuristics since WHOIS quota is limited
-        suspicious_tlds = ['.xyz', '.top', '.click', '.online', '.site', '.info']
-        suspicious = any(domain.endswith(t) for t in suspicious_tlds)
+        domain = d['domain'].lower()
+        parent = get_parent_domain(domain)
+
+        # Only check the parent domain, not subdomains
+        tld_suspicious = any(parent.endswith(t) for t in suspicious_tlds)
+        keyword_suspicious = any(kw in parent for kw in suspicious_keywords)
+        hyphen_count = parent.count('-')
+        hyphen_suspicious = hyphen_count >= 2
+
+        flagged = tld_suspicious or keyword_suspicious or hyphen_suspicious
 
         result[domain] = {
-            'domain_age_days': -1,
-            'whois_flagged':   1 if suspicious else 0,
+            'domain_age_days':      -1,
+            'whois_flagged':        1 if flagged else 0,
+            'tld_suspicious':       1 if tld_suspicious else 0,
+            'keyword_suspicious':   1 if keyword_suspicious else 0,
+            'hyphen_suspicious':    1 if hyphen_suspicious else 0,
         }
 
     flagged = sum(1 for v in result.values() if v['whois_flagged'] == 1)
-    print(f"  ✅ Signal 3: {flagged} domains with suspicious TLDs")
+    print(f"  ✅ Signal 3: {flagged} domains with suspicious patterns")
     return result
 
 
@@ -164,12 +209,6 @@ def analyze_domains(domains_data: list) -> dict:
     """
     Main analysis function.
     Takes crawled domain data, computes all 3 signals.
-
-    Args:
-        domains_data: list of dicts from Crawler Agent
-
-    Returns:
-        dict with all signal scores per domain
     """
     print(f"🔬 Fingerprint Analyst starting...")
     print(f"   Analyzing {len(domains_data)} domains...")
@@ -178,12 +217,10 @@ def analyze_domains(domains_data: list) -> dict:
     if not domains_data:
         return {}
 
-    # Compute all 3 signals
     sig1 = compute_signal1_similarity(domains_data)
     sig2 = compute_signal2_cadence(domains_data)
     sig3 = compute_signal3_whois(domains_data)
 
-    # Merge into per-domain feature dict
     features = {}
     for d in domains_data:
         domain = d['domain']
@@ -198,18 +235,14 @@ def analyze_domains(domains_data: list) -> dict:
         signals_triggered = similarity_flag + cadence_flagged + whois_flagged
 
         features[domain] = {
-            # Signal 1
             'avg_similarity':   s1.get('avg_similarity', 0.0),
             'max_similarity':   s1.get('max_similarity', 0.0),
             'similarity_flag':  similarity_flag,
-            # Signal 2
             'anomaly_score':    s2.get('anomaly_score', 0.0),
             'cadence_flagged':  cadence_flagged,
             'burst_score':      s2.get('burst_score', 0.0),
-            # Signal 3
             'domain_age_days':  s3.get('domain_age_days', -1),
             'whois_flagged':    whois_flagged,
-            # Combined
             'signals_triggered': signals_triggered,
             'hour_variance':    0.0,
         }
@@ -225,10 +258,9 @@ def analyze_domains(domains_data: list) -> dict:
 
 
 def analyze_domains_tool(domains_json: str) -> str:
-    """CrewAI tool wrapper — accepts JSON string of domain data."""
+    """CrewAI tool wrapper."""
     domains_data = json.loads(domains_json)
     result = analyze_domains(domains_data)
-    # Convert tuple keys to strings for JSON serialization
     result['sim_edges'] = {
         f"{k[0]}|||{k[1]}": v
         for k, v in result.get('sim_edges', {}).items()
@@ -236,25 +268,16 @@ def analyze_domains_tool(domains_json: str) -> str:
     return json.dumps(result)
 
 
-# ── Standalone test ──────────────────────────────────
 if __name__ == "__main__":
     from agents.crawler_agent import crawl_domains
 
     print("Testing Fingerprint Analyst Agent...")
-    print()
-
-    # Crawl some test domains
     test_data = crawl_domains(["example.com", "wikipedia.org"])
-
-    # Analyze them
     result = analyze_domains(test_data)
 
-    print()
-    print("Sample features:")
+    print("\nSample features:")
     for domain, feats in list(result['features'].items())[:2]:
         print(f"\n  {domain}:")
         for k, v in feats.items():
             print(f"    {k}: {v}")
-
-    print()
-    print("🎉 Fingerprint Analyst Agent test passed!")
+    print("\n🎉 Fingerprint Analyst Agent test passed!")
