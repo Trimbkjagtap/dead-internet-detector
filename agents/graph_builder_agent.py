@@ -6,6 +6,7 @@ import os
 import json
 from neo4j import GraphDatabase
 from dotenv import load_dotenv
+from config.signal_config import SIM_EDGE_FLAG_THRESHOLD
 
 load_dotenv()
 
@@ -39,6 +40,7 @@ def upsert_domain_nodes(driver, features: dict) -> int:
                     d.cadence_flagged   = $cadence_flagged,
                     d.burst_score       = $burst_score,
                     d.domain_age_days   = $domain_age_days,
+                    d.registrar         = $registrar,
                     d.whois_flagged     = $whois_flagged,
                     d.signals_triggered = $signals_triggered,
                     d.preliminary_verdict = $preliminary_verdict,
@@ -52,6 +54,7 @@ def upsert_domain_nodes(driver, features: dict) -> int:
             cadence_flagged  = int(feats.get('cadence_flagged', 0)),
             burst_score      = float(feats.get('burst_score', 0)),
             domain_age_days  = int(feats.get('domain_age_days', -1)),
+            registrar        = str(feats.get('registrar', 'unknown'))[:80],
             whois_flagged    = int(feats.get('whois_flagged', 0)),
             signals_triggered = int(feats.get('signals_triggered', 0)),
             preliminary_verdict = (
@@ -89,7 +92,7 @@ def upsert_similarity_edges(driver, sim_edges: dict) -> int:
             domain_a=domain_a,
             domain_b=domain_b,
             similarity=float(score),
-            flagged=1 if float(score) >= 0.85 else 0)
+            flagged=1 if float(score) >= SIM_EDGE_FLAG_THRESHOLD else 0)
             edges_created += 1
 
     return edges_created

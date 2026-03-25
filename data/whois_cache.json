@@ -1,0 +1,890 @@
+{
+  "meta": {
+    "day": "2026-03-25",
+    "queries_today": 0
+  },
+  "domains": {
+    "19thnews.org": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:02:11.647770",
+      "whois_flagged": 0
+    },
+    "abc.net.au": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:02:11.648067",
+      "whois_flagged": 0
+    },
+    "abc6onyourside.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:02:11.648186",
+      "whois_flagged": 0
+    },
+    "abcnews.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:02:11.648273",
+      "whois_flagged": 0
+    },
+    "advocate.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:02:11.648354",
+      "whois_flagged": 0
+    },
+    "businessinsider.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:02:12.023598",
+      "whois_flagged": 1
+    },
+    "albanyadvertiser.com.au": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:02:12.024274",
+      "whois_flagged": 0
+    },
+    "aljazeera.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:02:12.024683",
+      "whois_flagged": 0
+    },
+    "apnews.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:02:12.024947",
+      "whois_flagged": 0
+    },
+    "arstechnica.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:02:12.025387",
+      "whois_flagged": 0
+    },
+    "youtube.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:02:12.025793",
+      "whois_flagged": 0
+    },
+    "twitter.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:02:12.025936",
+      "whois_flagged": 0
+    },
+    "userway.org": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:02:12.026050",
+      "whois_flagged": 0
+    },
+    "goodmorningamerica.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:02:12.026164",
+      "whois_flagged": 0
+    },
+    "google.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:02:12.026305",
+      "whois_flagged": 0
+    },
+    "apple.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:02:12.026426",
+      "whois_flagged": 0
+    },
+    "pride.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:02:12.027203",
+      "whois_flagged": 0
+    },
+    "hivplusmag.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:02:12.027485",
+      "whois_flagged": 0
+    },
+    "thewest.com.au": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:02:12.027651",
+      "whois_flagged": 0
+    },
+    "nikkei.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:03:20.919216",
+      "whois_flagged": 0
+    },
+    "asiafinancial.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:03:20.919481",
+      "whois_flagged": 0
+    },
+    "atlantanewsfirst.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:03:20.919745",
+      "whois_flagged": 0
+    },
+    "bbc.co.uk": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:03:20.919914",
+      "whois_flagged": 0
+    },
+    "bbc.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:03:20.920076",
+      "whois_flagged": 0
+    },
+    "blogsicilia.it": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:03:20.920347",
+      "whois_flagged": 0
+    },
+    "caliber.az": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:03:20.920609",
+      "whois_flagged": 0
+    },
+    "calmatters.org": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:03:20.920757",
+      "whois_flagged": 0
+    },
+    "capitallinkintl.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:03:20.920907",
+      "whois_flagged": 0
+    },
+    "siciliafan.it": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:03:20.921074",
+      "whois_flagged": 0
+    },
+    "direttasicilia.it": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:03:20.921230",
+      "whois_flagged": 0
+    },
+    "digitaldemocracy.org": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:03:20.921388",
+      "whois_flagged": 0
+    },
+    "digitrend.it": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:03:20.921545",
+      "whois_flagged": 0
+    },
+    "pinterest.it": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:03:20.921718",
+      "whois_flagged": 0
+    },
+    "flutter.dev": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:03:20.921881",
+      "whois_flagged": 0
+    },
+    "cbs2iowa.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:04:11.894394",
+      "whois_flagged": 0
+    },
+    "cnbc.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:04:11.894844",
+      "whois_flagged": 0
+    },
+    "cnn.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:04:11.895121",
+      "whois_flagged": 0
+    },
+    "commondreams.org": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:04:11.895375",
+      "whois_flagged": 0
+    },
+    "concaveearth.net": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:04:11.895622",
+      "whois_flagged": 0
+    },
+    "cosmosdaily.co": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:04:11.895819",
+      "whois_flagged": 0
+    },
+    "ctvnews.ca": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:04:11.896029",
+      "whois_flagged": 0
+    },
+    "delta-report.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:04:12.254520",
+      "whois_flagged": 1
+    },
+    "bleacherreport.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:04:12.648555",
+      "whois_flagged": 1
+    },
+    "whitehouse.gov": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:04:12.650154",
+      "whois_flagged": 0
+    },
+    "dailypioneer.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:04:12.651128",
+      "whois_flagged": 0
+    },
+    "nbcnews.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:04:12.652001",
+      "whois_flagged": 0
+    },
+    "nytimes.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:04:12.652504",
+      "whois_flagged": 0
+    },
+    "bnnbloomberg.ca": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:04:12.653376",
+      "whois_flagged": 0
+    },
+    "x.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:04:12.654340",
+      "whois_flagged": 0
+    },
+    "linkedin.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:04:12.654977",
+      "whois_flagged": 0
+    },
+    "substack.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:05:24.570051",
+      "whois_flagged": 0
+    },
+    "estonianworld.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:05:24.570612",
+      "whois_flagged": 0
+    },
+    "eurointegration.com.ua": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:05:24.570841",
+      "whois_flagged": 0
+    },
+    "euronews.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:05:24.571053",
+      "whois_flagged": 0
+    },
+    "expressnews.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:05:24.571286",
+      "whois_flagged": 0
+    },
+    "focustaiwan.tw": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:05:24.571514",
+      "whois_flagged": 0
+    },
+    "fortune.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:05:24.571740",
+      "whois_flagged": 0
+    },
+    "fox13news.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:05:24.571971",
+      "whois_flagged": 0
+    },
+    "fox4news.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:05:24.572200",
+      "whois_flagged": 0
+    },
+    "enable-javascript.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:05:24.572427",
+      "whois_flagged": 0
+    },
+    "bit.ly": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:05:24.572640",
+      "whois_flagged": 0
+    },
+    "patreon.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:05:24.572861",
+      "whois_flagged": 0
+    },
+    "youtu.be": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:05:24.573080",
+      "whois_flagged": 0
+    },
+    "fortunechina.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:05:24.573301",
+      "whois_flagged": 0
+    },
+    "ssl.org": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:05:24.573523",
+      "whois_flagged": 0
+    },
+    "iban.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:05:24.573954",
+      "whois_flagged": 0
+    },
+    "out.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:10:40.413900",
+      "whois_flagged": 0
+    },
+    "bsky.app": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:10:40.414429",
+      "whois_flagged": 0
+    },
+    "facebook.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:10:40.414739",
+      "whois_flagged": 0
+    },
+    "thewaltdisneycompany.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:10:40.415010",
+      "whois_flagged": 0
+    },
+    "disneytermsofuse.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:10:40.415281",
+      "whois_flagged": 0
+    },
+    "equalpride.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:10:40.415553",
+      "whois_flagged": 0
+    },
+    "cefaluweb.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:12:07.682836",
+      "whois_flagged": 0
+    },
+    "t.me": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:12:07.683437",
+      "whois_flagged": 0
+    },
+    "wpvip.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:12:07.684490",
+      "whois_flagged": 0
+    },
+    "telegram.org": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:12:07.685509",
+      "whois_flagged": 0
+    },
+    "chron.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:12:54.390171",
+      "whois_flagged": 0
+    },
+    "theatlantic.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:12:54.390744",
+      "whois_flagged": 0
+    },
+    "wired.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:12:54.767472",
+      "whois_flagged": 1
+    },
+    "nbcsports.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:12:54.768622",
+      "whois_flagged": 0
+    },
+    "fox5dc.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:13:44.531701",
+      "whois_flagged": 0
+    },
+    "euronews.ba": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:13:44.532665",
+      "whois_flagged": 0
+    },
+    "euronewsgeorgia.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:13:44.533267",
+      "whois_flagged": 0
+    },
+    "euronews.ro": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:13:44.533845",
+      "whois_flagged": 0
+    },
+    "euronews.rs": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:13:44.534442",
+      "whois_flagged": 0
+    },
+    "theadvocateson.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:57:41.252092+00:00",
+      "whois_flagged": 0
+    },
+    "advocatechannel.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:57:41.252695+00:00",
+      "whois_flagged": 0
+    },
+    "breaking-truth-daily.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:58:32.440942+00:00",
+      "whois_flagged": 1
+    },
+    "real-news-network.net": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:58:32.976702+00:00",
+      "whois_flagged": 1
+    },
+    "patriot-updates-now.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:58:33.294402+00:00",
+      "whois_flagged": 1
+    },
+    "cbsnews.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:59:10.727612+00:00",
+      "whois_flagged": 0
+    },
+    "timesofisrael.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:59:10.728367+00:00",
+      "whois_flagged": 0
+    },
+    "amnesty.org": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:59:10.728954+00:00",
+      "whois_flagged": 0
+    },
+    "theguardian.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:59:10.729523+00:00",
+      "whois_flagged": 0
+    },
+    "democracydocket.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:59:53.788150+00:00",
+      "whois_flagged": 0
+    },
+    "democracynow.org": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:59:53.788806+00:00",
+      "whois_flagged": 0
+    },
+    "apple.co": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:59:53.789147+00:00",
+      "whois_flagged": 0
+    },
+    "euronews.bg": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-25T20:59:53.789479+00:00",
+      "whois_flagged": 0
+    }
+  }
+}

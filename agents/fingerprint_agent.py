@@ -9,11 +9,15 @@ from datetime import datetime
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.ensemble import IsolationForest
 from sentence_transformers import SentenceTransformer
+from config.signal_config import (
+    MODEL_NAME,
+    SIM_THRESHOLD,
+    bounded_contamination,
+)
+from services.whois_service import WhoisService
 
 # ── Config ───────────────────────────────────────────
-MODEL_NAME        = "all-MiniLM-L6-v2"
-SIM_THRESHOLD     = 0.45    # Signal 1 flag threshold
-CADENCE_THRESHOLD = -0.1    # Signal 2 flag threshold
+CADENCE_THRESHOLD = -0.1
 
 # Load model once at module level (cached after first load)
 _model = None
@@ -145,7 +149,7 @@ def compute_signal2_cadence(domains_data: list) -> dict:
         return result
 
     X   = np.array(cadence_features, dtype=float)
-    contamination = min(0.3, max(0.1, 1.0 / len(cadence_features)))
+    contamination = bounded_contamination(len(cadence_features))
     clf = IsolationForest(n_estimators=50, contamination=contamination, random_state=42)
     clf.fit(X)
     scores      = clf.decision_function(X)
@@ -169,39 +173,29 @@ def compute_signal3_whois(domains_data: list) -> dict:
     Signal 3: Domain registration pattern analysis.
     Flags domains with suspicious naming patterns and TLDs.
     """
-    print("  🔍 Computing Signal 3 (domain features)...")
-
-    suspicious_tlds = ['.xyz', '.top', '.click', '.online', '.site', '.info', '.buzz', '.icu']
-
-    suspicious_keywords = [
-        'truth', 'patriot', 'freedom', 'liberty', 'alert', 'insider',
-        'expose', 'breaking', 'real-news', 'updates-now', 'daily-truth',
-        'peoples-voice', 'wire', 'report', 'first-news', 'national-alert'
-    ]
+    print("  🔍 Computing Signal 3 (WHOIS enrichment + budgeted fallback)...")
+    whois_service = WhoisService()
 
     result = {}
     for d in domains_data:
         domain = d['domain'].lower()
         parent = get_parent_domain(domain)
-
-        # Only check the parent domain, not subdomains
-        tld_suspicious = any(parent.endswith(t) for t in suspicious_tlds)
-        keyword_suspicious = any(kw in parent for kw in suspicious_keywords)
-        hyphen_count = parent.count('-')
-        hyphen_suspicious = hyphen_count >= 2
-
-        flagged = tld_suspicious or keyword_suspicious or hyphen_suspicious
+        whois = whois_service.get_domain_features(parent)
 
         result[domain] = {
-            'domain_age_days':      -1,
-            'whois_flagged':        1 if flagged else 0,
-            'tld_suspicious':       1 if tld_suspicious else 0,
-            'keyword_suspicious':   1 if keyword_suspicious else 0,
-            'hyphen_suspicious':    1 if hyphen_suspicious else 0,
+            'domain_age_days':      int(whois.get('domain_age_days', -1)),
+            'whois_flagged':        int(whois.get('whois_flagged', 0)),
+            'registrar':            whois.get('registrar', 'unknown'),
+            'registration_country': whois.get('registration_country', ''),
+            'whois_source':         whois.get('source', 'heuristic'),
         }
 
     flagged = sum(1 for v in result.values() if v['whois_flagged'] == 1)
-    print(f"  ✅ Signal 3: {flagged} domains with suspicious patterns")
+    budget = whois_service.budget_status()
+    print(
+        f"  ✅ Signal 3: {flagged} domains flagged, WHOIS budget "
+        f"{budget['queries_today']}/{budget['daily_limit']} used"
+    )
     return result
 
 
@@ -242,6 +236,7 @@ def analyze_domains(domains_data: list) -> dict:
             'cadence_flagged':  cadence_flagged,
             'burst_score':      s2.get('burst_score', 0.0),
             'domain_age_days':  s3.get('domain_age_days', -1),
+            'registrar':        s3.get('registrar', 'unknown'),
             'whois_flagged':    whois_flagged,
             'signals_triggered': signals_triggered,
             'hour_variance':    0.0,

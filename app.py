@@ -114,6 +114,101 @@ with st.sidebar:
 st.title("🕸️ Dead Internet Detector")
 st.caption("Detect coordinated synthetic content ecosystems using graph analysis and AI")
 
+# ── v2 monitor preview ───────────────────────────────
+with st.expander("📡 Live Monitor (v2 Preview)", expanded=False):
+    col_a, col_b = st.columns([1, 1])
+
+    if "monitor_job_id" not in st.session_state:
+        st.session_state["monitor_job_id"] = None
+
+    with col_a:
+        if st.button("▶️ Start Monitor Cycle", use_container_width=True):
+            try:
+                start_resp = requests.post(f"{BACKEND_URL}/monitor/start", timeout=20)
+                if start_resp.status_code == 200:
+                    st.session_state["monitor_job_id"] = start_resp.json().get("job_id")
+                    st.success(f"Monitor job started: {st.session_state['monitor_job_id']}")
+                else:
+                    st.error(f"Monitor start failed: {start_resp.text}")
+            except Exception as e:
+                st.error(f"Monitor start error: {str(e)}")
+
+        if st.button("🔄 Refresh Monitor Job", use_container_width=True):
+            st.rerun()
+
+        job_id = st.session_state.get("monitor_job_id")
+        if job_id:
+            try:
+                job_resp = requests.get(f"{BACKEND_URL}/monitor/job/{job_id}", timeout=20)
+                if job_resp.status_code == 200:
+                    job = job_resp.json()
+                    status = job.get("status", "unknown")
+                    if status in ["queued", "running"]:
+                        st.info(f"Job {job_id} is {status}.")
+                    elif status == "completed":
+                        st.success(f"Job {job_id} completed")
+                        st.json(job.get("summary", {}))
+                    elif status == "failed":
+                        st.error(f"Job {job_id} failed: {job.get('error', 'unknown error')}")
+                        if job.get("traceback"):
+                            with st.expander("Traceback"):
+                                st.code(job.get("traceback"))
+                else:
+                    st.warning("Monitor job status unavailable")
+            except Exception as e:
+                st.warning(f"Monitor job polling error: {str(e)}")
+
+    with col_b:
+        try:
+            status_resp = requests.get(f"{BACKEND_URL}/feed-status", timeout=15)
+            if status_resp.status_code == 200:
+                latest = status_resp.json().get("latest")
+                if latest:
+                    c1, c2, c3 = st.columns(3)
+                    with c1:
+                        st.metric("WHOISDS", latest.get("whoisds_count", 0))
+                    with c2:
+                        st.metric("Reddit", latest.get("reddit_count", 0))
+                    with c3:
+                        st.metric("Queued", latest.get("queued_unique", 0))
+                    st.caption(f"Last run: {latest.get('ran_at', 'n/a')}")
+                else:
+                    st.info("No monitor runs yet")
+            else:
+                st.warning("Feed status unavailable")
+        except Exception:
+            st.warning("Feed status unavailable")
+
+    try:
+        timeline_resp = requests.get(f"{BACKEND_URL}/timeline?limit=15", timeout=15)
+        if timeline_resp.status_code == 200:
+            timeline = timeline_resp.json().get("timeline", [])
+            if timeline:
+                df_tl = pd.DataFrame(timeline)
+                if "ran_at" in df_tl.columns:
+                    df_tl["ran_at"] = pd.to_datetime(df_tl["ran_at"], errors="coerce")
+                    df_tl = df_tl.sort_values("ran_at")
+                    fig_tl = px.line(
+                        df_tl,
+                        x="ran_at",
+                        y=["queued_unique", "whoisds_count", "reddit_count"],
+                        title="Recent Monitor Runs",
+                        markers=True,
+                    )
+                    fig_tl.update_layout(
+                        paper_bgcolor="#0e1117",
+                        plot_bgcolor="#0e1117",
+                        font_color="#e0e0e0",
+                        legend_title_text="",
+                    )
+                    st.plotly_chart(fig_tl, use_container_width=True)
+            else:
+                st.info("Timeline is empty. Run a monitor cycle to populate it.")
+        else:
+            st.warning("Timeline endpoint unavailable")
+    except Exception:
+        st.warning("Timeline endpoint unavailable")
+
 # ── About section ────────────────────────────────────
 with st.expander("ℹ️ About This Project", expanded=False):
     col1, col2 = st.columns(2)
