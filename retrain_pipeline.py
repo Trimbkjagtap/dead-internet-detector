@@ -11,7 +11,7 @@ import pandas as pd
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from datetime import datetime
+from datetime import datetime, timezone
 
 sys.path.insert(0, '.')
 
@@ -20,6 +20,7 @@ from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
+from config.signal_config import SIM_THRESHOLD
 
 
 # ══════════════════════════════════════════════════════
@@ -117,7 +118,7 @@ def compute_features(crawled_data):
         for j in range(len(domains)):
             if i != j:
                 sims.append(float(sim_matrix[i][j]))
-                if sim_matrix[i][j] >= 0.5:  # Store edges for graph
+                if sim_matrix[i][j] >= SIM_THRESHOLD:  # Store edges for graph
                     pair = tuple(sorted([domains[i], domains[j]]))
                     if pair not in sim_edges:
                         sim_edges[pair] = round(float(sim_matrix[i][j]), 4)
@@ -128,8 +129,8 @@ def compute_features(crawled_data):
         sim_features[domains[i]] = {
             'avg_similarity': round(float(avg_sim), 4),
             'max_similarity': round(float(max_sim), 4),
-            'similarity_flag': 1 if max_sim >= 0.5 else 0,
-            'similar_domain_count': sum(1 for s in sims if s >= 0.5),
+            'similarity_flag': 1 if max_sim >= SIM_THRESHOLD else 0,
+            'similar_domain_count': sum(1 for s in sims if s >= SIM_THRESHOLD),
         }
     
     flagged_sim = sum(1 for v in sim_features.values() if v['similarity_flag'] == 1)
@@ -269,7 +270,7 @@ def save_features(df, sim_edges):
     # Save similarity edges
     edge_rows = []
     for (d1, d2), sim in sim_edges.items():
-        edge_rows.append({'domain_1': d1, 'domain_2': d2, 'similarity': sim, 'flagged': sim >= 0.5})
+        edge_rows.append({'domain_a': d1, 'domain_b': d2, 'similarity': sim, 'flagged': 1 if sim >= SIM_THRESHOLD else 0})
     
     df_edges = pd.DataFrame(edge_rows)
     df_edges.to_csv('data/similarity_edges.csv', index=False)
@@ -411,11 +412,13 @@ def retrain_gnn(df, sim_edges):
         'model_state_dict': model.state_dict(),
         'feature_cols': feature_cols,
         'n_features': len(feature_cols),
+        'domain_list': domain_list,
+        'domain_to_idx': domain_to_idx,
         'scaler_mean': scaler.mean_.tolist(),
         'scaler_scale': scaler.scale_.tolist(),
         'accuracy': float(acc),
         'n_domains': n_nodes,
-        'trained_at': datetime.utcnow().isoformat(),
+        'trained_at': datetime.now(timezone.utc).isoformat(),
     }
     
     # Backup old model

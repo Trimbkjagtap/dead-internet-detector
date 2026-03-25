@@ -6,8 +6,11 @@
 import os
 import sys
 import json
+import traceback
+import uuid
 from typing import List
-from datetime import datetime
+from datetime import datetime, timezone
+from pathlib import Path
 
 sys.path.insert(0, '.')
 
@@ -64,6 +67,26 @@ class StatsResponse(BaseModel):
 
 # ── In-memory job store (simple, no Redis needed) ────
 _jobs = {}
+MONITOR_LOG_FILE = Path("data/monitor_runs.jsonl")
+
+
+def _run_monitor_job(job_id: str) -> None:
+    """
+    Background worker for monitor runs. Updates in-memory job status.
+    """
+    _jobs[job_id]["status"] = "running"
+    _jobs[job_id]["started_at"] = datetime.now(timezone.utc).isoformat()
+    try:
+        from pipeline.monitor import run_monitor_cycle
+        summary = run_monitor_cycle()
+        _jobs[job_id]["status"] = "completed"
+        _jobs[job_id]["finished_at"] = datetime.now(timezone.utc).isoformat()
+        _jobs[job_id]["summary"] = summary
+    except Exception as e:
+        _jobs[job_id]["status"] = "failed"
+        _jobs[job_id]["finished_at"] = datetime.now(timezone.utc).isoformat()
+        _jobs[job_id]["error"] = str(e)
+        _jobs[job_id]["traceback"] = traceback.format_exc(limit=5)
 
 
 # ── Helper: get Neo4j driver ─────────────────────────
@@ -106,7 +129,7 @@ async def health_check():
     return {
         "status":    "ok",
         "message":   "Dead Internet Detector is running",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
 
@@ -152,7 +175,7 @@ async def analyze_domains(request: AnalyzeRequest):
         result = run_analysis(domains)
 
         # Add metadata
-        result['analyzed_at'] = datetime.utcnow().isoformat()
+        result['analyzed_at'] = datetime.now(timezone.utc).isoformat()
         result['api_version']  = "1.0.0"
 
         return result
@@ -266,6 +289,101 @@ async def get_stats():
             status_code=500,
             detail=f"Stats query failed: {str(e)}"
         )
+
+
+@app.get("/feed-status", tags=["Monitoring"])
+async def get_feed_status():
+    """
+    Returns latest feed ingestion summary from monitor runs.
+    """
+    if not MONITOR_LOG_FILE.exists():
+        return {
+            "status": "no-data",
+            "message": "No monitor runs found yet",
+            "latest": None,
+        }
+
+    lines = MONITOR_LOG_FILE.read_text(encoding="utf-8").strip().splitlines()
+    if not lines:
+        return {
+            "status": "no-data",
+            "message": "No monitor runs found yet",
+            "latest": None,
+        }
+
+    latest = json.loads(lines[-1])
+    return {
+        "status": "ok",
+        "latest": latest,
+    }
+
+
+@app.get("/timeline", tags=["Monitoring"])
+async def get_timeline(limit: int = 20):
+    """
+    Returns recent monitor runs as a timeline for dashboard charts.
+    """
+    if not MONITOR_LOG_FILE.exists():
+        return {"timeline": []}
+
+    lines = MONITOR_LOG_FILE.read_text(encoding="utf-8").strip().splitlines()
+    entries = []
+    for line in lines[-max(limit, 1):]:
+        try:
+            entries.append(json.loads(line))
+        except Exception:
+            continue
+
+    return {"timeline": entries}
+
+
+@app.post("/monitor/run", tags=["Monitoring"])
+async def run_monitor_once():
+    """
+    Runs one ingest -> analyze monitor cycle and returns summary.
+    """
+    try:
+        from pipeline.monitor import run_monitor_cycle
+        summary = run_monitor_cycle()
+        return {
+            "status": "ok",
+            "summary": summary,
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Monitor run failed: {str(e)}",
+        )
+
+
+@app.post("/monitor/start", tags=["Monitoring"])
+async def start_monitor_once(background_tasks: BackgroundTasks):
+    """
+    Starts one monitor run in the background and returns a job id immediately.
+    """
+    job_id = str(uuid.uuid4())
+    _jobs[job_id] = {
+        "job_id": job_id,
+        "status": "queued",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "summary": None,
+    }
+    background_tasks.add_task(_run_monitor_job, job_id)
+    return {
+        "status": "accepted",
+        "job_id": job_id,
+    }
+
+
+@app.get("/monitor/job/{job_id}", tags=["Monitoring"])
+async def get_monitor_job(job_id: str):
+    """
+    Poll monitor job status and final summary.
+    """
+    job = _jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Monitor job not found")
+    return job
 
 
 # ── Run directly ─────────────────────────────────────
