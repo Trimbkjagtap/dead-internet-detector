@@ -8,7 +8,7 @@ import sys
 import json
 import traceback
 import uuid
-from typing import List
+from typing import Dict, List
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -65,9 +65,223 @@ class StatsResponse(BaseModel):
     organic_domains:   int
 
 
+class LookupRequest(BaseModel):
+    domain: str
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "domain": "patriot-updates-now.com"
+            }
+        }
+
+
 # ── In-memory job store (simple, no Redis needed) ────
 _jobs = {}
 MONITOR_LOG_FILE = Path("data/monitor_runs.jsonl")
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _normalize_domain(domain: str) -> str:
+    d = (domain or "").strip().lower()
+    d = d.replace("https://", "").replace("http://", "")
+    d = d.split("/")[0].strip()
+    return d
+
+
+def _risk_copy(verdict: str) -> Dict[str, str]:
+    if verdict == "SYNTHETIC":
+        return {
+            "risk_level": "HIGH_RISK",
+            "headline": "High Risk - Likely part of a fake network",
+        }
+    if verdict == "REVIEW":
+        return {
+            "risk_level": "SUSPICIOUS",
+            "headline": "Suspicious - Some warning signs detected",
+        }
+    return {
+        "risk_level": "LOW_RISK",
+        "headline": "Looks Legitimate - No warning signs",
+    }
+
+
+def _heuristic_preliminary_verdict(domain: str) -> Dict:
+    from services.whois_service import WhoisService
+
+    whois = WhoisService()
+    whois_features = whois.get_domain_features(domain)
+
+    tld_flags = [".xyz", ".top", ".click", ".online", ".site", ".info", ".buzz", ".icu"]
+    keyword_flags = [
+        "truth", "patriot", "freedom", "liberty", "alert", "insider",
+        "expose", "breaking", "real-news", "updates-now", "daily-truth",
+        "peoples-voice", "wire", "report", "first-news", "national-alert",
+    ]
+
+    reasons = []
+    score = 0
+
+    age_days = int(whois_features.get("domain_age_days", -1))
+    if age_days >= 0 and age_days <= 90:
+        score += 1
+        reasons.append("Domain was registered very recently")
+
+    if any(domain.endswith(tld) for tld in tld_flags):
+        score += 1
+        reasons.append("Domain uses a higher-risk TLD commonly seen in low-trust campaigns")
+
+    if any(k in domain for k in keyword_flags) or domain.count("-") >= 2:
+        score += 1
+        reasons.append("Domain name pattern looks promotional or synthetic")
+
+    whois_flagged = int(whois_features.get("whois_flagged", 0))
+    if whois_flagged:
+        score += 1
+        reasons.append("WHOIS pattern triggered the registration-risk heuristic")
+
+    if score >= 3:
+        verdict = "SYNTHETIC"
+        confidence = 0.74
+    elif score >= 1:
+        verdict = "REVIEW"
+        confidence = 0.58
+    else:
+        verdict = "ORGANIC"
+        confidence = 0.76
+
+    base = _risk_copy(verdict)
+    explanation = (
+        "; ".join(reasons)
+        if reasons else
+        "No strong warning signs were found in quick domain-registration heuristics"
+    )
+
+    return {
+        "source": "preliminary",
+        "domain": domain,
+        "cluster_verdict": verdict,
+        "max_confidence": confidence,
+        "risk_level": base["risk_level"],
+        "headline": base["headline"],
+        "summary": (
+            "Preliminary check only. "
+            "A full network analysis has been queued in the background."
+        ),
+        "domain_verdicts": {
+            domain: {
+                "verdict": verdict,
+                "confidence": confidence,
+                "signals_triggered": min(score, 3),
+                "signal_1_similarity": 0,
+                "signal_2_cadence": 0,
+                "signal_3_whois": 1 if whois_flagged else 0,
+                "explanation": explanation,
+            }
+        },
+        "analysis_type": "preliminary",
+        "analyzed_at": _now_iso(),
+    }
+
+
+def _run_lookup_analysis_job(job_id: str, domain: str) -> None:
+    _jobs[job_id]["status"] = "running"
+    _jobs[job_id]["started_at"] = _now_iso()
+    try:
+        from agents.crew import run_analysis
+        result = run_analysis([domain])
+        _jobs[job_id]["status"] = "completed"
+        _jobs[job_id]["finished_at"] = _now_iso()
+        _jobs[job_id]["result"] = {
+            "cluster_verdict": result.get("cluster_verdict", "UNKNOWN"),
+            "summary": result.get("summary", ""),
+            "max_confidence": result.get("max_confidence", 0),
+        }
+    except Exception as e:
+        _jobs[job_id]["status"] = "failed"
+        _jobs[job_id]["finished_at"] = _now_iso()
+        _jobs[job_id]["error"] = str(e)
+        _jobs[job_id]["traceback"] = traceback.format_exc(limit=5)
+
+
+def _lookup_cached_domain(domain: str) -> Dict:
+    driver = get_neo4j_driver()
+    try:
+        with driver.session() as session:
+            node = session.run(
+                """
+                MATCH (d:Domain {domain: $domain})
+                OPTIONAL MATCH (d)-[r:SIMILAR_TO]-(other:Domain)
+                RETURN
+                    d.domain AS domain,
+                    d.preliminary_verdict AS preliminary_verdict,
+                    d.signals_triggered AS signals_triggered,
+                    d.avg_similarity AS avg_similarity,
+                    d.max_similarity AS max_similarity,
+                    d.anomaly_score AS anomaly_score,
+                    d.burst_score AS burst_score,
+                    d.domain_age_days AS domain_age_days,
+                    d.registrar AS registrar,
+                    d.updated_at AS updated_at,
+                    collect(DISTINCT other.domain)[0..8] AS related_domains,
+                    count(DISTINCT other) AS related_count
+                LIMIT 1
+                """,
+                domain=domain,
+            ).single()
+    finally:
+        driver.close()
+
+    if not node:
+        return {}
+
+    verdict = (node.get("preliminary_verdict") or "ORGANIC").upper()
+    confidence = min(0.97, max(0.35, (int(node.get("signals_triggered") or 0) / 3.0) + 0.35))
+    related_count = int(node.get("related_count") or 0)
+    reasons = []
+
+    if float(node.get("max_similarity") or 0) >= 0.82:
+        reasons.append("High content similarity was observed with related domains")
+    if int(node.get("domain_age_days") or -1) >= 0 and int(node.get("domain_age_days") or -1) <= 90:
+        reasons.append("Domain registration is recent")
+    if float(node.get("burst_score") or 0) >= 0.6:
+        reasons.append("Publishing cadence appears coordinated")
+    if related_count > 0:
+        reasons.append(f"Connected to {related_count} related domain(s) in the network graph")
+
+    if not reasons:
+        reasons.append("No strong warning signals were found in stored graph features")
+
+    base = _risk_copy(verdict)
+    summary = ". ".join(reasons) + "."
+
+    return {
+        "source": "cache",
+        "domain": domain,
+        "cluster_verdict": verdict,
+        "max_confidence": round(confidence, 2),
+        "risk_level": base["risk_level"],
+        "headline": base["headline"],
+        "summary": summary,
+        "analysis_type": "cached",
+        "related_domains": [d for d in (node.get("related_domains") or []) if d and d != domain],
+        "domain_verdicts": {
+            domain: {
+                "verdict": verdict,
+                "confidence": round(confidence, 2),
+                "signals_triggered": int(node.get("signals_triggered") or 0),
+                "signal_1_similarity": 1 if float(node.get("max_similarity") or 0) >= 0.82 else 0,
+                "signal_2_cadence": 1 if float(node.get("burst_score") or 0) >= 0.6 else 0,
+                "signal_3_whois": 1 if int(node.get("domain_age_days") or -1) in range(0, 91) else 0,
+                "explanation": summary,
+            }
+        },
+        "analyzed_at": _now_iso(),
+        "cached_updated_at": node.get("updated_at"),
+    }
 
 
 def _run_monitor_job(job_id: str) -> None:
@@ -112,8 +326,11 @@ async def root():
         "endpoints": {
             "health":  "GET  /health",
             "analyze": "POST /analyze",
+            "lookup":  "POST /lookup",
+            "lookup_job": "GET /lookup/job/{job_id}",
             "graph":   "GET  /graph",
             "stats":   "GET  /stats",
+            "recently_detected": "GET /recently-detected",
             "docs":    "GET  /docs",
         }
     }
@@ -129,8 +346,64 @@ async def health_check():
     return {
         "status":    "ok",
         "message":   "Dead Internet Detector is running",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": _now_iso(),
     }
+
+
+@app.post("/lookup", tags=["Lookup"])
+async def lookup_domain(request: LookupRequest, background_tasks: BackgroundTasks):
+    """
+    Fast single-domain lookup for real users.
+
+    Flow:
+    1) Check Neo4j cache for prior analysis and return instantly if found.
+    2) If missing, return lightweight preliminary verdict in seconds.
+    3) Queue full pipeline analysis in background for future cache hits.
+    """
+    domain = _normalize_domain(request.domain)
+    if not domain:
+        raise HTTPException(status_code=400, detail="Please provide a valid domain")
+
+    try:
+        cached = _lookup_cached_domain(domain)
+        if cached:
+            return {
+                "status": "cached",
+                **cached,
+            }
+
+        preliminary = _heuristic_preliminary_verdict(domain)
+        job_id = str(uuid.uuid4())
+        _jobs[job_id] = {
+            "job_id": job_id,
+            "job_type": "lookup_full_analysis",
+            "domain": domain,
+            "status": "queued",
+            "created_at": _now_iso(),
+            "result": None,
+        }
+        background_tasks.add_task(_run_lookup_analysis_job, job_id, domain)
+
+        return {
+            "status": "queued",
+            **preliminary,
+            "job_id": job_id,
+            "job_status_url": f"/lookup/job/{job_id}",
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lookup failed: {str(e)}")
+
+
+@app.get("/lookup/job/{job_id}", tags=["Lookup"])
+async def get_lookup_job(job_id: str):
+    job = _jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Lookup job not found")
+    if job.get("job_type") != "lookup_full_analysis":
+        raise HTTPException(status_code=400, detail="Job is not a lookup analysis job")
+    return job
 
 
 @app.post("/analyze", tags=["Analysis"])
@@ -335,6 +608,68 @@ async def get_timeline(limit: int = 20):
             continue
 
     return {"timeline": entries}
+
+
+@app.get("/recently-detected", tags=["Monitoring"])
+async def recently_detected(limit: int = 10):
+    """
+    Returns recently updated suspicious/synthetic domains for homepage feed.
+    """
+    if limit < 1:
+        limit = 1
+    if limit > 50:
+        limit = 50
+
+    try:
+        driver = get_neo4j_driver()
+        with driver.session() as session:
+            rows = session.run(
+                """
+                MATCH (d:Domain)
+                WHERE d.preliminary_verdict IN ['SYNTHETIC', 'REVIEW']
+                RETURN
+                    d.domain AS domain,
+                    d.preliminary_verdict AS verdict,
+                    d.signals_triggered AS signals,
+                    d.max_similarity AS max_similarity,
+                    d.domain_age_days AS domain_age_days,
+                    d.updated_at AS updated_at
+                ORDER BY d.updated_at DESC
+                LIMIT $limit
+                """,
+                limit=limit,
+            )
+            results = []
+            for r in rows:
+                verdict = (r.get("verdict") or "REVIEW").upper()
+                base = _risk_copy(verdict)
+                reason_bits = []
+                if float(r.get("max_similarity") or 0) >= 0.82:
+                    reason_bits.append("high content similarity")
+                if int(r.get("signals") or 0) >= 2:
+                    reason_bits.append("multiple detection signals")
+                if int(r.get("domain_age_days") or -1) in range(0, 91):
+                    reason_bits.append("very recent domain registration")
+                reason = ", ".join(reason_bits) if reason_bits else "suspicious network indicators"
+
+                results.append({
+                    "domain": r.get("domain"),
+                    "verdict": verdict,
+                    "risk_level": base["risk_level"],
+                    "headline": base["headline"],
+                    "signals_triggered": int(r.get("signals") or 0),
+                    "updated_at": r.get("updated_at"),
+                    "reason": reason,
+                })
+        driver.close()
+
+        return {
+            "status": "ok",
+            "count": len(results),
+            "items": results,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Recently detected query failed: {str(e)}")
 
 
 @app.post("/monitor/run", tags=["Monitoring"])

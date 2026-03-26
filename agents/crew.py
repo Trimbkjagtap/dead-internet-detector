@@ -94,22 +94,20 @@ def run_analysis(seed_domains: list) -> dict:
     # Generate human-readable summary
     if cluster == 'SYNTHETIC':
         summary = (
-            f"🚨 SYNTHETIC ECOSYSTEM DETECTED — "
-            f"{verdict.get('synthetic_domains',0)} domain(s) flagged. "
-            f"Maximum confidence: {conf:.0%}. "
-            f"This network shows coordinated artificial origin."
+            f"High Risk - Likely part of a fake network. "
+            f"{verdict.get('synthetic_domains',0)} domain(s) were flagged with converging signals. "
+            f"Confidence: {conf:.0%}."
         )
     elif cluster == 'REVIEW':
         summary = (
-            f"⚠️  REVIEW RECOMMENDED — "
-            f"{verdict.get('review_domains',0)} domain(s) need human review. "
-            f"Single signal triggered — not enough for automatic verdict."
+            f"Suspicious - Some warning signs detected. "
+            f"{verdict.get('review_domains',0)} domain(s) need a closer look. "
+            f"Only one major signal fired, so this is not a confirmed synthetic network yet."
         )
     else:
         summary = (
-            f"✅ ORGANIC — No suspicious patterns detected. "
-            f"All {len(features)} domains appear to be legitimate. "
-            f"Maximum synthetic probability: {conf:.0%}."
+            f"Looks Legitimate - No warning signs were detected. "
+            f"All {len(features)} domains currently appear organic."
         )
 
     # Add failed domain info to summary

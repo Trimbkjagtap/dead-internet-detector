@@ -1,6 +1,6 @@
 {
   "meta": {
-    "day": "2026-03-25",
+    "day": "2026-03-26",
     "queries_today": 0
   },
   "domains": {
@@ -884,6 +884,87 @@
       "registration_country": "",
       "source": "heuristic",
       "fetched_at": "2026-03-25T20:59:53.789479+00:00",
+      "whois_flagged": 0
+    },
+    "www.google.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-26T00:27:43.873524+00:00",
+      "whois_flagged": 0
+    },
+    "www.twitter.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-26T00:28:11.779649+00:00",
+      "whois_flagged": 0
+    },
+    "www.nbcnews.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-26T00:30:27.976315+00:00",
+      "whois_flagged": 0
+    },
+    "nbc.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-26T00:30:59.611160+00:00",
+      "whois_flagged": 0
+    },
+    "peacocktv.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-26T00:30:59.611605+00:00",
+      "whois_flagged": 0
+    },
+    "hackerone.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-26T00:30:59.611972+00:00",
+      "whois_flagged": 0
+    },
+    "app.link": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-26T00:30:59.612291+00:00",
+      "whois_flagged": 0
+    },
+    "x.ai": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-26T00:30:59.612612+00:00",
+      "whois_flagged": 0
+    },
+    "github.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-26T00:30:59.612940+00:00",
       "whois_flagged": 0
     }
   }
