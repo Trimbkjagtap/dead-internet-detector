@@ -121,124 +121,112 @@ with st.sidebar:
 st.title("🕸️ Dead Internet Detector")
 st.caption("Detect coordinated synthetic content ecosystems using graph analysis and AI")
 
-tab_analyze, tab_monitor = st.tabs(["🔍 Analyze Domains", "📡 Live Monitor Dashboard"])
+tab_analyze, tab_monitor = st.tabs(["🔍 Check a Domain", "📡 Live Monitor Dashboard"])
 
 
 # ══════════════════════════════════════════════════════
 # TAB 1 — ANALYZE DOMAINS
 # ══════════════════════════════════════════════════════
 with tab_analyze:
+    st.subheader("Paste a suspicious domain")
+    st.caption("Type one domain and get a fast trust check. Example: patriot-updates-now.com")
 
-    # ── Settings row ─────────────────────────────────
-    col_input, col_presets = st.columns([3, 1])
+    recent = api_get("/recently-detected?limit=5")
+    recent_items = recent.get("items", []) if recent else []
 
-    with col_input:
-        st.subheader("🎯 Enter Seed Domains to Investigate")
-        domains_input = st.text_area(
-            "Enter domains (one per line)",
-            value="breaking-truth-daily.com\nreal-news-network.net\npatriot-updates-now.com",
-            height=120,
-            placeholder="suspicious-news.com\nfake-updates.net",
-        )
-        max_domains = st.slider("Max domains to analyze", 1, 20, 5, key="analyze_max")
+    rc1, rc2 = st.columns([1, 2])
+    with rc1:
+        st.metric("Recently Flagged", len(recent_items))
+    with rc2:
+        if recent_items:
+            top = ", ".join([item.get("domain", "") for item in recent_items[:3]])
+            st.caption(f"Latest flagged domains: {top}")
+        else:
+            st.caption("No recently flagged domains yet")
 
-    with col_presets:
-        st.markdown("**Quick presets:**")
-        if st.button("🟢 Legit sites", use_container_width=True):
-            st.session_state["preset"] = "bbc.com\nreuters.com\nnytimes.com"
-            st.rerun()
-        if st.button("🔴 Suspicious", use_container_width=True):
-            st.session_state["preset"] = (
-                "breaking-truth-daily.com\n"
-                "real-news-network.net\n"
-                "patriot-updates-now.com"
-            )
-            st.rerun()
+    with st.expander("See recently detected domains"):
+        if recent_items:
+            for item in recent_items:
+                icon = "🔴" if item.get("verdict") == "SYNTHETIC" else "🟡"
+                st.markdown(
+                    f"{icon} **{item.get('domain', '')}** - {item.get('headline', 'Suspicious activity')}  \n"
+                    f"Reason: {item.get('reason', 'Network indicators detected')}"
+                )
+        else:
+            st.info("Run monitor cycles to populate this feed.")
 
-    if "preset" in st.session_state:
-        domains_input = st.session_state.pop("preset")
-
-    raw_domains = [d.strip() for d in domains_input.strip().split("\n") if d.strip()]
-    domains = raw_domains[:max_domains]
-
-    if len(raw_domains) > max_domains:
-        st.warning(f"Only analyzing first {max_domains} domains (adjust slider above)")
-    if len(domains) < 2:
-        st.info("Enter at least 2 domains for meaningful network analysis")
-
-    st.caption(f"Domains to analyze: **{', '.join(domains)}**")
-
-    analyze_clicked = st.button(
-        "🔍 Analyze Domains",
-        type="primary",
-        use_container_width=True,
-        disabled=len(domains) == 0,
+    domain_input = st.text_input(
+        "Paste a domain to check",
+        value=st.session_state.get("lookup_domain", ""),
+        placeholder="suspicious-news.com",
     )
 
-    # ── Run analysis ─────────────────────────────────
-    if analyze_clicked and domains:
-        progress = st.progress(0)
-        status = st.empty()
+    c_action, c_refresh = st.columns([2, 1])
+    with c_action:
+        check_clicked = st.button(
+            "Check This Site",
+            type="primary",
+            use_container_width=True,
+            disabled=(not domain_input.strip()),
+        )
+    with c_refresh:
+        refresh_job = st.button("Refresh Full Analysis", use_container_width=True)
 
-        steps = [
-            (10, "🕷️ Step 1/4: Crawler Agent crawling domains..."),
-            (30, "🔬 Step 2/4: Fingerprint Analyst computing signals..."),
-            (70, "🏗️ Step 3/4: Graph Builder updating Neo4j..."),
-            (90, "⚖️ Step 4/4: Verdict Agent running GNN inference..."),
-        ]
-
-        status.text(steps[0][1])
-        progress.progress(steps[0][0])
-
+    if check_clicked and domain_input.strip():
+        st.session_state["lookup_domain"] = domain_input.strip()
         try:
-            status.text(steps[1][1])
-            progress.progress(steps[1][0])
-
-            with st.spinner("AI agents working... (1-3 minutes)"):
+            with st.spinner("Running instant lookup..."):
                 t0 = time.time()
                 resp = requests.post(
-                    f"{BACKEND_URL}/analyze",
-                    json={"domains": domains},
-                    timeout=180,
+                    f"{BACKEND_URL}/lookup",
+                    json={"domain": domain_input.strip()},
+                    timeout=20,
                 )
                 elapsed = time.time() - t0
 
-            for pct, msg in steps[2:]:
-                status.text(msg)
-                progress.progress(pct)
-                time.sleep(0.4)
-
-            progress.progress(100)
-            status.empty()
-            progress.empty()
-
             if resp.status_code != 200:
-                st.error(f"Analysis failed: {resp.text}")
-                st.stop()
+                st.error(f"Lookup failed: {resp.text}")
+            else:
+                lookup = resp.json()
+                st.session_state["result"] = lookup
+                st.success(f"Lookup complete in {elapsed:.1f} seconds")
 
-            result = resp.json()
-            st.success(f"✅ Analysis complete in {elapsed:.0f} seconds")
-            st.session_state["result"] = result
-
-            failed = result.get("failed_domains", [])
-            if failed:
-                st.warning(
-                    f"{len(failed)} domain(s) could not be crawled: "
-                    f"**{', '.join(failed)}**"
-                )
-
+                if lookup.get("status") == "queued" and lookup.get("job_id"):
+                    st.session_state["lookup_job_id"] = lookup.get("job_id")
+                    st.info("Full analysis is running in the background. Refresh to check status.")
+                else:
+                    st.session_state["lookup_job_id"] = None
         except requests.exceptions.Timeout:
-            progress.empty(); status.empty()
-            st.error("Request timed out. Try fewer domains.")
-            st.stop()
+            st.error("Lookup timed out. Try again in a few seconds.")
         except requests.exceptions.ConnectionError:
-            progress.empty(); status.empty()
             st.error(f"Cannot connect to backend at {BACKEND_URL}")
-            st.stop()
         except Exception as e:
-            progress.empty(); status.empty()
             st.error(f"Error: {e}")
-            st.stop()
+
+    if refresh_job and st.session_state.get("lookup_job_id"):
+        job_id = st.session_state.get("lookup_job_id")
+        job = api_get(f"/lookup/job/{job_id}", timeout=10)
+        if not job:
+            st.warning("Job status unavailable. Backend may have restarted.")
+        else:
+            status = job.get("status")
+            if status in ("queued", "running"):
+                st.info(f"Full analysis is still {status}.")
+            elif status == "completed":
+                domain = st.session_state.get("lookup_domain", "")
+                if domain:
+                    latest_resp = requests.post(
+                        f"{BACKEND_URL}/lookup",
+                        json={"domain": domain},
+                        timeout=20,
+                    )
+                    if latest_resp.status_code == 200:
+                        st.session_state["result"] = latest_resp.json()
+                        st.success("Full analysis is complete. Showing updated cached result.")
+                st.session_state["lookup_job_id"] = None
+            elif status == "failed":
+                st.error(f"Background analysis failed: {job.get('error', 'unknown error')}")
+                st.session_state["lookup_job_id"] = None
 
     # ── Show results ─────────────────────────────────
     if "result" in st.session_state:
@@ -246,39 +234,43 @@ with tab_analyze:
         verdict = result.get("cluster_verdict", "UNKNOWN")
         confidence = result.get("max_confidence", 0.0)
         summary = result.get("summary", "")
+        headline = result.get("headline", "Verdict")
+        analysis_type = result.get("analysis_type", "")
         domain_verdicts = result.get("domain_verdicts", {})
 
         st.divider()
 
         # Verdict badge
-        st.subheader("🎯 Verdict")
+        st.subheader("Trust Verdict")
         if verdict == "SYNTHETIC":
             st.markdown(
-                f'<div class="verdict-synthetic">🚨 SYNTHETIC ECOSYSTEM DETECTED'
+                f'<div class="verdict-synthetic">🔴 {headline}'
                 f'<br/><span style="font-size:16px">Confidence: {confidence:.0%}</span></div>',
                 unsafe_allow_html=True,
             )
         elif verdict == "REVIEW":
             st.markdown(
-                f'<div class="verdict-review">⚠️ REVIEW RECOMMENDED'
+                f'<div class="verdict-review">🟡 {headline}'
                 f'<br/><span style="font-size:16px">Confidence: {confidence:.0%}</span></div>',
                 unsafe_allow_html=True,
             )
         else:
             st.markdown(
-                f'<div class="verdict-organic">✅ ORGANIC'
+                f'<div class="verdict-organic">🟢 {headline}'
                 f'<br/><span style="font-size:16px">Confidence: {confidence:.0%}</span></div>',
                 unsafe_allow_html=True,
             )
 
-        st.info(f"📋 {summary}")
+        if analysis_type == "preliminary":
+            st.warning("Preliminary result shown. Full network analysis is running in the background.")
+        st.info(f"{summary}")
 
         # Metrics row
         c1, c2, c3, c4 = st.columns(4)
-        with c1: st.metric("Domains Analyzed", result.get("domains_analyzed", 0))
-        with c2: st.metric("🔴 Synthetic", result.get("synthetic_domains", 0))
-        with c3: st.metric("🟡 Review", result.get("review_domains", 0))
-        with c4: st.metric("🟢 Organic", result.get("organic_domains", 0))
+        with c1: st.metric("Domain", result.get("domain") or (result.get("seed_domains", [""])[0] if result.get("seed_domains") else "—"))
+        with c2: st.metric("🔴 High Risk", result.get("synthetic_domains", 1 if verdict == "SYNTHETIC" else 0))
+        with c3: st.metric("🟡 Suspicious", result.get("review_domains", 1 if verdict == "REVIEW" else 0))
+        with c4: st.metric("🟢 Looks Legit", result.get("organic_domains", 1 if verdict == "ORGANIC" else 0))
 
         st.divider()
 
@@ -437,11 +429,12 @@ Provide: (1) what signal patterns suggest, (2) whether this looks organic or coo
         report = {
             "project": "Dead Internet Detector",
             "analyzed_at": result.get("analyzed_at", ""),
-            "seed_domains": result.get("seed_domains", []),
+            "seed_domains": result.get("seed_domains", [result.get("domain", "")]),
             "cluster_verdict": verdict,
             "confidence": confidence,
             "summary": summary,
             "domain_verdicts": domain_verdicts,
+            "analysis_type": analysis_type,
         }
         st.download_button(
             "📥 Download Full Report (JSON)",
