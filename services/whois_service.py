@@ -96,11 +96,16 @@ class WhoisService:
             "outputFormat": "JSON",
         }
 
-        response = requests.get(url, params=params, timeout=WHOIS_TIMEOUT_SEC)
-        if response.status_code != 200:
+        try:
+            response = requests.get(url, params=params, timeout=WHOIS_TIMEOUT_SEC)
+            if response.status_code != 200:
+                return {}
+            data = response.json()
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning("WHOIS API HTTP/parse error for %s: %s", domain, exc)
             return {}
 
-        data = response.json()
         record = data.get("WhoisRecord", {})
 
         created_date = record.get("createdDate") or record.get("registryData", {}).get("createdDate") or ""
@@ -129,7 +134,9 @@ class WhoisService:
                 result = self._query_whois_api(domain)
                 if result:
                     self._increment_budget()
-            except Exception:
+            except Exception as exc:
+                import logging
+                logging.getLogger(__name__).warning("WHOIS lookup failed for %s: %s", domain, exc)
                 result = {}
 
         if not result:

@@ -1,6 +1,6 @@
 {
   "meta": {
-    "day": "2026-03-26",
+    "day": "2026-03-30",
     "queries_today": 0
   },
   "domains": {
@@ -965,6 +965,618 @@
       "registration_country": "",
       "source": "heuristic",
       "fetched_at": "2026-03-26T00:30:59.612940+00:00",
+      "whois_flagged": 0
+    },
+    "abc7chicago.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T17:54:40.304932+00:00",
+      "whois_flagged": 0
+    },
+    "americanprogress.org": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T17:54:40.305602+00:00",
+      "whois_flagged": 0
+    },
+    "ansa.it": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T17:54:40.305990+00:00",
+      "whois_flagged": 0
+    },
+    "aol.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T17:54:40.306354+00:00",
+      "whois_flagged": 0
+    },
+    "armyrecognition.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T17:54:40.306702+00:00",
+      "whois_flagged": 0
+    },
+    "disneyprivacycenter.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T17:54:40.307051+00:00",
+      "whois_flagged": 0
+    },
+    "governing.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T17:54:40.307410+00:00",
+      "whois_flagged": 0
+    },
+    "elpais.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T17:54:40.307794+00:00",
+      "whois_flagged": 0
+    },
+    "actblue.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T17:54:40.308181+00:00",
+      "whois_flagged": 0
+    },
+    "spotify.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T17:54:40.308667+00:00",
+      "whois_flagged": 0
+    },
+    "biblegateway.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T17:55:38.366749+00:00",
+      "whois_flagged": 0
+    },
+    "bostonglobe.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T17:55:38.367442+00:00",
+      "whois_flagged": 0
+    },
+    "brusselssignal.eu": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T17:55:38.367951+00:00",
+      "whois_flagged": 0
+    },
+    "buenosairesherald.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T17:55:38.368435+00:00",
+      "whois_flagged": 0
+    },
+    "mailchi.mp": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T17:55:38.368915+00:00",
+      "whois_flagged": 0
+    },
+    "creditkarma.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T17:55:38.369377+00:00",
+      "whois_flagged": 0
+    },
+    "intuit.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T17:55:38.369820+00:00",
+      "whois_flagged": 0
+    },
+    "c-span.org": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T17:56:40.927109+00:00",
+      "whois_flagged": 0
+    },
+    "cp24.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T17:56:40.927859+00:00",
+      "whois_flagged": 0
+    },
+    "studentcam.org": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T17:56:40.928345+00:00",
+      "whois_flagged": 0
+    },
+    "c-spanshop.org": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T17:56:40.928833+00:00",
+      "whois_flagged": 0
+    },
+    "iticket.az": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T17:56:40.929471+00:00",
+      "whois_flagged": 0
+    },
+    "motherjones.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T17:56:40.929988+00:00",
+      "whois_flagged": 0
+    },
+    "dailymail.co.uk": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T17:57:21.827646+00:00",
+      "whois_flagged": 0
+    },
+    "denver7.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T17:57:21.828238+00:00",
+      "whois_flagged": 0
+    },
+    "dirgemagazine.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T17:57:21.828863+00:00",
+      "whois_flagged": 0
+    },
+    "indiatimes.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T17:57:21.829332+00:00",
+      "whois_flagged": 0
+    },
+    "wikipedia.org": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T17:57:21.829835+00:00",
+      "whois_flagged": 0
+    },
+    "discord.gg": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T17:57:21.830316+00:00",
+      "whois_flagged": 0
+    },
+    "jiraaf.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T17:57:21.830790+00:00",
+      "whois_flagged": 0
+    },
+    "etadviser.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T17:57:21.831253+00:00",
+      "whois_flagged": 0
+    },
+    "wikiversity.org": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T17:57:21.831793+00:00",
+      "whois_flagged": 0
+    },
+    "wikibooks.org": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T17:57:21.832315+00:00",
+      "whois_flagged": 0
+    },
+    "wikiquote.org": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T17:57:21.832815+00:00",
+      "whois_flagged": 0
+    },
+    "wikimediafoundation.org": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T17:57:21.833499+00:00",
+      "whois_flagged": 0
+    },
+    "wikimedia.org": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T17:57:21.834076+00:00",
+      "whois_flagged": 0
+    },
+    "ansalatina.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T18:25:43.923456+00:00",
+      "whois_flagged": 0
+    },
+    "mediaite.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T18:27:40.317879+00:00",
+      "whois_flagged": 0
+    },
+    "ktvu.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T18:27:40.319556+00:00",
+      "whois_flagged": 0
+    },
+    "earthjustice.org": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T18:27:40.320117+00:00",
+      "whois_flagged": 0
+    },
+    "federalregister.gov": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T18:27:40.320636+00:00",
+      "whois_flagged": 0
+    },
+    "elpuenteelacpr.org": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T18:27:40.321163+00:00",
+      "whois_flagged": 0
+    },
+    "archives.gov": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T18:27:40.321766+00:00",
+      "whois_flagged": 0
+    },
+    "aawsat.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T18:28:30.428275+00:00",
+      "whois_flagged": 0
+    },
+    "kyodonews.net": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T18:28:30.428964+00:00",
+      "whois_flagged": 0
+    },
+    "ratopati.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T18:28:30.429489+00:00",
+      "whois_flagged": 0
+    },
+    "mediawiki.org": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T18:28:30.430013+00:00",
+      "whois_flagged": 0
+    },
+    "wikivoyage.org": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T18:28:30.431089+00:00",
+      "whois_flagged": 0
+    },
+    "www.youtube.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T18:52:23.118158+00:00",
+      "whois_flagged": 0
+    },
+    "codeassist.google": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T18:53:08.007345+00:00",
+      "whois_flagged": 0
+    },
+    "chrome.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T18:53:08.008276+00:00",
+      "whois_flagged": 0
+    },
+    "geminicli.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T18:53:08.009188+00:00",
+      "whois_flagged": 0
+    },
+    "android.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T18:53:08.010090+00:00",
+      "whois_flagged": 0
+    },
+    "web.dev": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T18:53:08.011197+00:00",
+      "whois_flagged": 0
+    },
+    "blog.google": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T18:53:08.012115+00:00",
+      "whois_flagged": 0
+    },
+    "googleblog.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T18:53:08.013184+00:00",
+      "whois_flagged": 0
+    },
+    "io.google": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T18:53:08.014174+00:00",
+      "whois_flagged": 0
+    },
+    "www.northeastern.edu": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T19:00:32.259214+00:00",
+      "whois_flagged": 0
+    },
+    "northeastern.edu": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T19:01:14.737926+00:00",
+      "whois_flagged": 0
+    },
+    "ac.uk": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T19:01:14.738543+00:00",
+      "whois_flagged": 0
+    },
+    "nuhuskies.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T19:01:14.739260+00:00",
+      "whois_flagged": 0
+    },
+    "sidearmsports.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T19:01:14.739732+00:00",
+      "whois_flagged": 0
+    },
+    "lnkd.in": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T19:01:14.740195+00:00",
+      "whois_flagged": 0
+    },
+    "microsoft.com": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T19:01:14.740657+00:00",
+      "whois_flagged": 0
+    },
+    "goo.gle": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T19:05:13.969983+00:00",
+      "whois_flagged": 0
+    },
+    "skills.google": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T19:05:13.970922+00:00",
+      "whois_flagged": 0
+    },
+    "dart.dev": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T19:05:13.971773+00:00",
+      "whois_flagged": 0
+    },
+    "pub.dev": {
+      "created_date": "",
+      "domain_age_days": -1,
+      "registrar": "unknown",
+      "registration_country": "",
+      "source": "heuristic",
+      "fetched_at": "2026-03-30T19:05:13.972282+00:00",
       "whois_flagged": 0
     }
   }

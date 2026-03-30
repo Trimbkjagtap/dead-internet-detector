@@ -76,9 +76,27 @@ class LookupRequest(BaseModel):
         }
 
 
-# ── In-memory job store (simple, no Redis needed) ────
-_jobs = {}
+# ── Job store: persisted to data/jobs.json ───────────
 MONITOR_LOG_FILE = Path("data/monitor_runs.jsonl")
+_JOBS_FILE       = Path("data/jobs.json")
+_REPORTS_DIR     = Path("data/reports")
+
+
+def _load_jobs() -> dict:
+    if _JOBS_FILE.exists():
+        try:
+            return json.loads(_JOBS_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return {}
+
+
+def _save_jobs() -> None:
+    _JOBS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    _JOBS_FILE.write_text(json.dumps(_jobs, indent=2), encoding="utf-8")
+
+
+_jobs: dict = _load_jobs()
 
 
 def _now_iso() -> str:
@@ -190,21 +208,50 @@ def _heuristic_preliminary_verdict(domain: str) -> Dict:
 def _run_lookup_analysis_job(job_id: str, domain: str) -> None:
     _jobs[job_id]["status"] = "running"
     _jobs[job_id]["started_at"] = _now_iso()
+    _save_jobs()
     try:
         from agents.crew import run_analysis
-        result = run_analysis([domain])
+
+        # Include related domains already in the graph so similarity signal
+        # can fire (signal 1 requires ≥2 domains to compare).
+        seed_domains = [domain]
+        try:
+            _neo_driver = get_neo4j_driver()
+            with _neo_driver.session() as _s:
+                _rows = _s.run(
+                    """
+                    MATCH (d:Domain {domain: $domain})-[:SIMILAR_TO]-(other:Domain)
+                    RETURN other.domain AS other_domain
+                    LIMIT 9
+                    """,
+                    domain=domain,
+                )
+                for _row in _rows:
+                    od = _row.get("other_domain")
+                    if od and od not in seed_domains:
+                        seed_domains.append(od)
+            _neo_driver.close()
+        except Exception:
+            pass  # proceed with just the single domain if graph lookup fails
+
+        result = run_analysis(seed_domains)
         _jobs[job_id]["status"] = "completed"
         _jobs[job_id]["finished_at"] = _now_iso()
+        # Store the full result on the job so the frontend can use it
+        # directly without depending on a Neo4j cache re-read.
+        _jobs[job_id]["full_result"] = result
         _jobs[job_id]["result"] = {
             "cluster_verdict": result.get("cluster_verdict", "UNKNOWN"),
             "summary": result.get("summary", ""),
             "max_confidence": result.get("max_confidence", 0),
         }
+        _save_jobs()
     except Exception as e:
         _jobs[job_id]["status"] = "failed"
         _jobs[job_id]["finished_at"] = _now_iso()
         _jobs[job_id]["error"] = str(e)
         _jobs[job_id]["traceback"] = traceback.format_exc(limit=5)
+        _save_jobs()
 
 
 def _lookup_cached_domain(domain: str) -> Dict:
@@ -258,6 +305,55 @@ def _lookup_cached_domain(domain: str) -> Dict:
     base = _risk_copy(verdict)
     summary = ". ".join(reasons) + "."
 
+    # Build evidence pairs: prefer the full_result stored on the most recent
+    # completed job for this domain (contains live excerpts from the crawl),
+    # then fall back to SIMILAR_TO edges in Neo4j.
+    evidence_pairs: List[Dict] = []
+
+    # 1) Check job store for a completed full_result with evidence_pairs
+    best_job = None
+    for j in _jobs.values():
+        if (
+            j.get("domain") == domain
+            and j.get("job_type") == "lookup_full_analysis"
+            and j.get("status") == "completed"
+            and j.get("full_result", {}).get("evidence_pairs")
+        ):
+            if best_job is None or j.get("finished_at", "") > best_job.get("finished_at", ""):
+                best_job = j
+    if best_job:
+        evidence_pairs = best_job["full_result"]["evidence_pairs"]
+
+    # 2) Fall back to Neo4j SIMILAR_TO edges (populated by multi-domain /analyze runs)
+    if not evidence_pairs:
+        try:
+            ev_driver = get_neo4j_driver()
+            with ev_driver.session() as ev_session:
+                ev_rows = ev_session.run(
+                    """
+                    MATCH (d:Domain {domain: $domain})-[r:SIMILAR_TO]-(other:Domain)
+                    WHERE r.similarity IS NOT NULL
+                    RETURN other.domain AS other_domain,
+                           r.similarity  AS similarity,
+                           d.excerpt     AS excerpt_a,
+                           other.excerpt AS excerpt_b
+                    ORDER BY r.similarity DESC
+                    LIMIT 10
+                    """,
+                    domain=domain,
+                )
+                for row in ev_rows:
+                    evidence_pairs.append({
+                        "domain_a":   domain,
+                        "domain_b":   row.get("other_domain", ""),
+                        "similarity": round(float(row.get("similarity") or 0), 4),
+                        "excerpt_a":  row.get("excerpt_a") or "",
+                        "excerpt_b":  row.get("excerpt_b") or "",
+                    })
+            ev_driver.close()
+        except Exception:
+            pass  # evidence is best-effort; verdict is unaffected
+
     return {
         "source": "cache",
         "domain": domain,
@@ -268,6 +364,7 @@ def _lookup_cached_domain(domain: str) -> Dict:
         "summary": summary,
         "analysis_type": "cached",
         "related_domains": [d for d in (node.get("related_domains") or []) if d and d != domain],
+        "evidence_pairs": evidence_pairs,
         "domain_verdicts": {
             domain: {
                 "verdict": verdict,
@@ -286,21 +383,24 @@ def _lookup_cached_domain(domain: str) -> Dict:
 
 def _run_monitor_job(job_id: str) -> None:
     """
-    Background worker for monitor runs. Updates in-memory job status.
+    Background worker for monitor runs. Updates persisted job status.
     """
     _jobs[job_id]["status"] = "running"
     _jobs[job_id]["started_at"] = datetime.now(timezone.utc).isoformat()
+    _save_jobs()
     try:
         from pipeline.monitor import run_monitor_cycle
         summary = run_monitor_cycle()
         _jobs[job_id]["status"] = "completed"
         _jobs[job_id]["finished_at"] = datetime.now(timezone.utc).isoformat()
         _jobs[job_id]["summary"] = summary
+        _save_jobs()
     except Exception as e:
         _jobs[job_id]["status"] = "failed"
         _jobs[job_id]["finished_at"] = datetime.now(timezone.utc).isoformat()
         _jobs[job_id]["error"] = str(e)
         _jobs[job_id]["traceback"] = traceback.format_exc(limit=5)
+        _save_jobs()
 
 
 # ── Helper: get Neo4j driver ─────────────────────────
@@ -367,12 +467,62 @@ async def lookup_domain(request: LookupRequest, background_tasks: BackgroundTask
     try:
         cached = _lookup_cached_domain(domain)
         if cached:
+            # If cached result has no evidence pairs, queue a background
+            # re-analysis so the frontend can poll for updated evidence.
+            if not cached.get("evidence_pairs"):
+                # Only queue if no job is already running for this domain
+                already_queued = any(
+                    j.get("domain") == domain
+                    and j.get("job_type") == "lookup_full_analysis"
+                    and j.get("status") in ("queued", "running")
+                    for j in _jobs.values()
+                )
+                if not already_queued:
+                    job_id = str(uuid.uuid4())
+                    _jobs[job_id] = {
+                        "job_id": job_id,
+                        "job_type": "lookup_full_analysis",
+                        "domain": domain,
+                        "status": "queued",
+                        "created_at": _now_iso(),
+                        "result": None,
+                    }
+                    _save_jobs()
+                    background_tasks.add_task(_run_lookup_analysis_job, job_id, domain)
+                    return {
+                        "status": "queued",
+                        **cached,
+                        "job_id": job_id,
+                        "job_status_url": f"/lookup/job/{job_id}",
+                    }
             return {
                 "status": "cached",
                 **cached,
             }
 
+        # If a job for this domain is already queued or running, reuse it
+        # instead of spawning a duplicate pipeline run.
+        existing_job_id = None
+        for jid, j in _jobs.items():
+            if (
+                j.get("domain") == domain
+                and j.get("job_type") == "lookup_full_analysis"
+                and j.get("status") in ("queued", "running")
+            ):
+                existing_job_id = jid
+                break
+
         preliminary = _heuristic_preliminary_verdict(domain)
+
+        if existing_job_id:
+            # Job already exists — return preliminary with the existing job id
+            return {
+                "status": "queued",
+                **preliminary,
+                "job_id": existing_job_id,
+                "job_status_url": f"/lookup/job/{existing_job_id}",
+            }
+
         job_id = str(uuid.uuid4())
         _jobs[job_id] = {
             "job_id": job_id,
@@ -382,6 +532,7 @@ async def lookup_domain(request: LookupRequest, background_tasks: BackgroundTask
             "created_at": _now_iso(),
             "result": None,
         }
+        _save_jobs()
         background_tasks.add_task(_run_lookup_analysis_job, job_id, domain)
 
         return {
@@ -595,13 +746,22 @@ async def get_feed_status():
 async def get_timeline(limit: int = 20):
     """
     Returns recent monitor runs as a timeline for dashboard charts.
+    Reads only the tail of the log file to avoid loading the entire file.
     """
     if not MONITOR_LOG_FILE.exists():
         return {"timeline": []}
 
-    lines = MONITOR_LOG_FILE.read_text(encoding="utf-8").strip().splitlines()
+    from collections import deque
+    limit = max(1, limit)
+    tail: deque = deque(maxlen=limit)
+    with MONITOR_LOG_FILE.open(encoding="utf-8") as fh:
+        for raw_line in fh:
+            stripped = raw_line.strip()
+            if stripped:
+                tail.append(stripped)
+
     entries = []
-    for line in lines[-max(limit, 1):]:
+    for line in tail:
         try:
             entries.append(json.loads(line))
         except Exception:
@@ -703,6 +863,7 @@ async def start_monitor_once(background_tasks: BackgroundTasks):
         "created_at": datetime.now(timezone.utc).isoformat(),
         "summary": None,
     }
+    _save_jobs()
     background_tasks.add_task(_run_monitor_job, job_id)
     return {
         "status": "accepted",
@@ -719,6 +880,47 @@ async def get_monitor_job(job_id: str):
     if not job:
         raise HTTPException(status_code=404, detail="Monitor job not found")
     return job
+
+
+# ══════════════════════════════════════════════════════
+# SHAREABLE REPORTS
+# ══════════════════════════════════════════════════════
+
+class SaveReportRequest(BaseModel):
+    report: dict
+
+
+@app.post("/report/save", tags=["Reports"])
+async def save_report(request: SaveReportRequest):
+    """
+    Persist an analysis result as a shareable report.
+    Returns a stable report_id that can be retrieved via GET /report/{report_id}.
+    """
+    report_id = str(uuid.uuid4())
+    _REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    report_path = _REPORTS_DIR / f"{report_id}.json"
+    payload = {
+        "report_id":  report_id,
+        "saved_at":   _now_iso(),
+        **request.report,
+    }
+    report_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    return {"report_id": report_id}
+
+
+@app.get("/report/{report_id}", tags=["Reports"])
+async def get_report(report_id: str):
+    """
+    Retrieve a previously saved report by its ID.
+    """
+    # Sanitize: only allow UUID-shaped IDs to prevent path traversal
+    import re
+    if not re.fullmatch(r"[0-9a-f\-]{36}", report_id):
+        raise HTTPException(status_code=400, detail="Invalid report ID")
+    report_path = _REPORTS_DIR / f"{report_id}.json"
+    if not report_path.exists():
+        raise HTTPException(status_code=404, detail="Report not found")
+    return json.loads(report_path.read_text(encoding="utf-8"))
 
 
 # ── Run directly ─────────────────────────────────────

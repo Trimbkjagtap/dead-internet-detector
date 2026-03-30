@@ -225,10 +225,12 @@ def produce_verdict(features: dict, sim_edges: dict) -> dict:
                 verdict = 'REVIEW'
             else:
                 verdict = 'ORGANIC'
-                # For organic domains, show confidence in organic verdict
-                # (flip: low synthetic confidence = high organic confidence)
-                confidence = round(1.0 - confidence, 2)
-                confidence = max(0.55, min(confidence, 0.97))
+                # Compute organic confidence directly: high when no signals and
+                # no soft indicators; gently reduced by similarity/burst presence.
+                sim_boost_org    = float(feats.get('max_similarity', 0)) * 0.3
+                cadence_boost_org = float(feats.get('burst_score', 0)) * 0.2
+                gnn_boost_org    = syn_prob * 0.05
+                confidence = round(max(0.55, min(1.0 - (sim_boost_org + cadence_boost_org + gnn_boost_org), 0.97)), 2)
 
             explanation = generate_explanation(domain, feats, confidence)
 

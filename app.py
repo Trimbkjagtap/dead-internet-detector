@@ -27,6 +27,13 @@ try:
 except Exception:
     pass
 
+# Public-facing URL used in shareable report links (may differ from internal BACKEND_URL)
+PUBLIC_BACKEND_URL = os.getenv("PUBLIC_BACKEND_URL", BACKEND_URL)
+try:
+    PUBLIC_BACKEND_URL = st.secrets.get("PUBLIC_BACKEND_URL", PUBLIC_BACKEND_URL)
+except Exception:
+    pass
+
 
 # ── Custom CSS ───────────────────────────────────────
 st.markdown("""
@@ -161,25 +168,28 @@ with tab_analyze:
         placeholder="suspicious-news.com",
     )
 
-    c_action, c_refresh = st.columns([2, 1])
-    with c_action:
-        check_clicked = st.button(
-            "Check This Site",
-            type="primary",
-            use_container_width=True,
-            disabled=(not domain_input.strip()),
-        )
-    with c_refresh:
-        refresh_job = st.button("Refresh Full Analysis", use_container_width=True)
+    check_clicked = st.button(
+        "🔍 Check This Site",
+        type="primary",
+        use_container_width=True,
+        disabled=(not domain_input.strip()),
+    )
 
     if check_clicked and domain_input.strip():
-        st.session_state["lookup_domain"] = domain_input.strip()
+        new_domain = domain_input.strip()
+        # If different domain, clear previous state
+        if new_domain != st.session_state.get("lookup_domain", ""):
+            st.session_state.pop("result", None)
+            st.session_state.pop("ai_analysis", None)
+            st.session_state.pop("report_id", None)
+            st.session_state["lookup_job_id"] = None
+        st.session_state["lookup_domain"] = new_domain
         try:
-            with st.spinner("Running instant lookup..."):
+            with st.spinner("Checking domain..."):
                 t0 = time.time()
                 resp = requests.post(
                     f"{BACKEND_URL}/lookup",
-                    json={"domain": domain_input.strip()},
+                    json={"domain": new_domain},
                     timeout=20,
                 )
                 elapsed = time.time() - t0
@@ -189,13 +199,11 @@ with tab_analyze:
             else:
                 lookup = resp.json()
                 st.session_state["result"] = lookup
-                st.success(f"Lookup complete in {elapsed:.1f} seconds")
-
                 if lookup.get("status") == "queued" and lookup.get("job_id"):
                     st.session_state["lookup_job_id"] = lookup.get("job_id")
-                    st.info("Full analysis is running in the background. Refresh to check status.")
                 else:
                     st.session_state["lookup_job_id"] = None
+                st.rerun()
         except requests.exceptions.Timeout:
             st.error("Lookup timed out. Try again in a few seconds.")
         except requests.exceptions.ConnectionError:
@@ -203,30 +211,42 @@ with tab_analyze:
         except Exception as e:
             st.error(f"Error: {e}")
 
-    if refresh_job and st.session_state.get("lookup_job_id"):
-        job_id = st.session_state.get("lookup_job_id")
+    # ── Auto-poll background job ──────────────────────
+    job_id = st.session_state.get("lookup_job_id")
+    if job_id:
         job = api_get(f"/lookup/job/{job_id}", timeout=10)
-        if not job:
-            st.warning("Job status unavailable. Backend may have restarted.")
-        else:
-            status = job.get("status")
-            if status in ("queued", "running"):
-                st.info(f"Full analysis is still {status}.")
-            elif status == "completed":
-                domain = st.session_state.get("lookup_domain", "")
-                if domain:
-                    latest_resp = requests.post(
-                        f"{BACKEND_URL}/lookup",
-                        json={"domain": domain},
-                        timeout=20,
-                    )
-                    if latest_resp.status_code == 200:
-                        st.session_state["result"] = latest_resp.json()
-                        st.success("Full analysis is complete. Showing updated cached result.")
-                st.session_state["lookup_job_id"] = None
-            elif status == "failed":
-                st.error(f"Background analysis failed: {job.get('error', 'unknown error')}")
-                st.session_state["lookup_job_id"] = None
+        job_status = job.get("status") if job else None
+
+        if job_status in ("queued", "running"):
+            st.info("⏳ **Deep analysis running...** Results will appear automatically.")
+            time.sleep(5)
+            st.rerun()
+        elif job_status == "completed":
+            full_result = job.get("full_result")
+            if full_result:
+                full_result["analysis_type"] = "fresh"
+                full_result["analyzed_at"] = job.get("finished_at", "")
+                st.session_state["result"] = full_result
+            else:
+                # Old job without full_result — re-fetch from cache which
+                # now pulls evidence_pairs from the job store.
+                domain_for_lookup = job.get("domain", "")
+                if domain_for_lookup:
+                    try:
+                        cached_resp = requests.post(
+                            f"{BACKEND_URL}/lookup",
+                            json={"domain": domain_for_lookup},
+                            timeout=15,
+                        )
+                        if cached_resp.status_code == 200:
+                            st.session_state["result"] = cached_resp.json()
+                    except Exception:
+                        pass
+            st.session_state["lookup_job_id"] = None
+            st.rerun()
+        elif job_status == "failed":
+            st.error(f"Analysis failed: {job.get('error', 'unknown error')}")
+            st.session_state["lookup_job_id"] = None
 
     # ── Show results ─────────────────────────────────
     if "result" in st.session_state:
@@ -262,24 +282,31 @@ with tab_analyze:
             )
 
         if analysis_type == "preliminary":
-            st.warning("Preliminary result shown. Full network analysis is running in the background.")
-        st.info(f"{summary}")
+            pass  # The job-poll banner above already tells the user analysis is running
+        else:
+            st.info(f"📋 {summary}")
 
         # Metrics row
         c1, c2, c3, c4 = st.columns(4)
-        with c1: st.metric("Domain", result.get("domain") or (result.get("seed_domains", [""])[0] if result.get("seed_domains") else "—"))
+        _display_domain = result.get("domain") or (result.get("seed_domains", [""])[0] if result.get("seed_domains") else "—")
+        if isinstance(_display_domain, str) and _display_domain.startswith("www."):
+            _display_domain = _display_domain[4:]
+        with c1: st.metric("Domain", _display_domain)
         with c2: st.metric("🔴 High Risk", result.get("synthetic_domains", 1 if verdict == "SYNTHETIC" else 0))
         with c3: st.metric("🟡 Suspicious", result.get("review_domains", 1 if verdict == "REVIEW" else 0))
         with c4: st.metric("🟢 Looks Legit", result.get("organic_domains", 1 if verdict == "ORGANIC" else 0))
 
         st.divider()
 
+        evidence_pairs = result.get("evidence_pairs", [])
+
         # Result sub-tabs
-        r_tab1, r_tab2, r_tab3, r_tab4 = st.tabs([
+        r_tab1, r_tab2, r_tab3, r_tab4, r_tab5 = st.tabs([
             "🕸️ Network Graph",
             "📊 Signal Analysis",
             "🤖 GPT-4 Analysis",
             "📋 Domain Details",
+            f"🔍 Evidence ({len(evidence_pairs)})",
         ])
 
         # ── Network Graph ────────────────────────────
@@ -423,9 +450,56 @@ Provide: (1) what signal patterns suggest, (2) whether this looks organic or coo
                         with c3: st.metric("WHOIS", "🚨 Triggered" if dv.get("signal_3_whois") else "✅ Clear")
                         st.info(f"💬 {dv.get('explanation', 'No explanation available')}")
 
+        # ── Evidence ─────────────────────────────────
+        with r_tab5:
+            st.subheader("Content Similarity Evidence")
+            st.caption(
+                "Each card below shows a flagged domain pair whose content is "
+                "unusually similar — the raw text excerpts side-by-side so you "
+                "can judge the match yourself."
+            )
+            if not evidence_pairs:
+                st.info(
+                    "No similar pairs detected above the threshold — or this is "
+                    "a preliminary result. Run or refresh the full analysis to "
+                    "populate evidence."
+                )
+            else:
+                for ep in evidence_pairs:
+                    sim_pct = f"{ep['similarity']:.0%}"
+                    with st.expander(
+                        f"**{ep['domain_a']}** ↔ **{ep['domain_b']}** — similarity {sim_pct}",
+                        expanded=(ep['similarity'] >= 0.7),
+                    ):
+                        st.markdown(
+                            f"**Cosine similarity: `{ep['similarity']}`** "
+                            f"— threshold is {0.45}"
+                        )
+                        col_a, col_b = st.columns(2)
+                        with col_a:
+                            st.markdown(f"**{ep['domain_a']}**")
+                            st.text_area(
+                                label="excerpt_a",
+                                value=ep.get("excerpt_a") or "(no content captured)",
+                                height=200,
+                                disabled=True,
+                                label_visibility="collapsed",
+                                key=f"ea_{ep['domain_a']}_{ep['domain_b']}",
+                            )
+                        with col_b:
+                            st.markdown(f"**{ep['domain_b']}**")
+                            st.text_area(
+                                label="excerpt_b",
+                                value=ep.get("excerpt_b") or "(no content captured)",
+                                height=200,
+                                disabled=True,
+                                label_visibility="collapsed",
+                                key=f"eb_{ep['domain_a']}_{ep['domain_b']}",
+                            )
+
         st.divider()
 
-        # Download report
+        # ── Export & Share ────────────────────────────
         report = {
             "project": "Dead Internet Detector",
             "analyzed_at": result.get("analyzed_at", ""),
@@ -434,15 +508,46 @@ Provide: (1) what signal patterns suggest, (2) whether this looks organic or coo
             "confidence": confidence,
             "summary": summary,
             "domain_verdicts": domain_verdicts,
+            "evidence_pairs": evidence_pairs,
             "analysis_type": analysis_type,
         }
-        st.download_button(
-            "📥 Download Full Report (JSON)",
-            data=json.dumps(report, indent=2),
-            file_name="dead_internet_report.json",
-            mime="application/json",
-            use_container_width=True,
-        )
+
+        exp_col, share_col = st.columns(2)
+
+        with exp_col:
+            st.download_button(
+                "📥 Download Full Report (JSON)",
+                data=json.dumps(report, indent=2),
+                file_name="dead_internet_report.json",
+                mime="application/json",
+                use_container_width=True,
+            )
+
+        with share_col:
+            if st.button("🔗 Generate Shareable Link", use_container_width=True):
+                try:
+                    save_resp = requests.post(
+                        f"{BACKEND_URL}/report/save",
+                        json={"report": report},
+                        timeout=10,
+                    )
+                    if save_resp.status_code == 200:
+                        report_id = save_resp.json().get("report_id", "")
+                        st.session_state["report_id"] = report_id
+                    else:
+                        st.error(f"Could not save report: {save_resp.text}")
+                except Exception as e:
+                    st.error(f"Share failed: {e}")
+
+        if st.session_state.get("report_id"):
+            report_id = st.session_state["report_id"]
+            report_url = f"{PUBLIC_BACKEND_URL}/report/{report_id}"
+            st.success("Report saved. Share this link:")
+            st.code(report_url, language=None)
+            st.caption(
+                "Paste this URL into an email, document, or browser. "
+                "Anyone with the link can retrieve the full analysis JSON."
+            )
 
         with st.expander("🔧 Raw API Response"):
             st.json(result)

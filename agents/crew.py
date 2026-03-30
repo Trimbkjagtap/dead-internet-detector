@@ -65,6 +65,7 @@ def run_analysis(seed_domains: list) -> dict:
 
     features  = analysis.get('features', {})
     sim_edges = analysis.get('sim_edges', {})
+    excerpts  = analysis.get('excerpts', {})
 
     print(f"  Features computed for {len(features)} domains")
     print()
@@ -114,6 +115,25 @@ def run_analysis(seed_domains: list) -> dict:
     if failed:
         summary += f" Note: {len(failed)} domain(s) could not be crawled: {', '.join(failed)}."
 
+    # Build evidence pairs: one entry per flagged similarity edge
+    evidence_pairs = []
+    for key, score in sim_edges.items():
+        if "|||" in str(key):
+            a, b = str(key).split("|||")
+        elif isinstance(key, (list, tuple)) and len(key) == 2:
+            a, b = key
+        else:
+            continue
+        evidence_pairs.append({
+            'domain_a':   a,
+            'domain_b':   b,
+            'similarity': round(float(score), 4),
+            'excerpt_a':  excerpts.get(a, ''),
+            'excerpt_b':  excerpts.get(b, ''),
+        })
+    # Sort highest similarity first
+    evidence_pairs.sort(key=lambda x: x['similarity'], reverse=True)
+
     final_result = {
         'cluster_verdict':   cluster,
         'max_confidence':    conf,
@@ -126,6 +146,7 @@ def run_analysis(seed_domains: list) -> dict:
         'seed_domains':      seed_domains,
         'domains_analyzed':  len(features),
         'failed_domains':    failed,
+        'evidence_pairs':    evidence_pairs,
     }
 
     # ── Print final summary ─────────────────────────

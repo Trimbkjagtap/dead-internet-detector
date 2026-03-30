@@ -73,6 +73,8 @@ def compute_signal1_similarity(domains_data: list) -> dict:
     # Build edges and per-domain scores
     edges         = {}
     domain_scores = {}
+    # Map domain -> short excerpt for evidence display (first 400 chars of clean text)
+    excerpts      = {d['domain']: d.get('text', '')[:400].strip() for d in domains_data}
 
     for i in range(len(domains)):
         similarities = []
@@ -90,9 +92,9 @@ def compute_signal1_similarity(domains_data: list) -> dict:
             similarities.append(sim)
 
             if sim >= SIM_THRESHOLD:
-                pair = tuple(sorted([domains[i], domains[j]]))
-                if pair not in edges:
-                    edges[pair] = round(sim, 4)
+                pair_key = "|||".join(sorted([domains[i], domains[j]]))
+                if pair_key not in edges:
+                    edges[pair_key] = round(sim, 4)
                 flagged_pairs.append((domains[j], sim))
 
         avg_sim = float(np.mean(similarities)) if similarities else 0.0
@@ -108,7 +110,7 @@ def compute_signal1_similarity(domains_data: list) -> dict:
     flagged = sum(1 for v in domain_scores.values() if v['similarity_flag'] == 1)
     print(f"  ✅ Signal 1: {len(edges)} similar pairs found, {flagged} domains flagged")
 
-    return {'domain_scores': domain_scores, 'edges': edges}
+    return {'domain_scores': domain_scores, 'edges': edges, 'excerpts': excerpts}
 
 
 def compute_signal2_cadence(domains_data: list) -> dict:
@@ -249,6 +251,7 @@ def analyze_domains(domains_data: list) -> dict:
     return {
         'features':   features,
         'sim_edges':  sig1.get('edges', {}),
+        'excerpts':   sig1.get('excerpts', {}),
     }
 
 

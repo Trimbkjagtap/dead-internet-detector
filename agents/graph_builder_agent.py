@@ -23,11 +23,13 @@ def get_driver():
     return GraphDatabase.driver(URI, auth=(USERNAME, PASSWORD))
 
 
-def upsert_domain_nodes(driver, features: dict) -> int:
+def upsert_domain_nodes(driver, features: dict, excerpts: dict = None) -> int:
     """
     Create or update domain nodes in Neo4j.
     Uses MERGE so existing nodes get updated, not duplicated.
+    excerpts: optional dict of domain -> text excerpt for evidence display.
     """
+    excerpts = excerpts or {}
     nodes_created = 0
     with driver.session() as session:
         for domain, feats in features.items():
@@ -44,6 +46,7 @@ def upsert_domain_nodes(driver, features: dict) -> int:
                     d.whois_flagged     = $whois_flagged,
                     d.signals_triggered = $signals_triggered,
                     d.preliminary_verdict = $preliminary_verdict,
+                    d.excerpt           = $excerpt,
                     d.updated_at        = timestamp()
             """,
             domain=domain,
@@ -61,7 +64,8 @@ def upsert_domain_nodes(driver, features: dict) -> int:
                 'SYNTHETIC' if feats.get('signals_triggered', 0) >= 2
                 else 'REVIEW' if feats.get('signals_triggered', 0) == 1
                 else 'ORGANIC'
-            ))
+            ),
+            excerpt = str(excerpts.get(domain, ''))[:400])
             nodes_created += 1
 
     return nodes_created
@@ -126,7 +130,7 @@ def build_graph(analysis_result: dict) -> dict:
     Creates/updates Neo4j nodes and edges.
 
     Args:
-        analysis_result: dict with 'features' and 'sim_edges' keys
+        analysis_result: dict with 'features', 'sim_edges', and 'excerpts' keys
 
     Returns:
         dict with graph statistics
@@ -135,6 +139,7 @@ def build_graph(analysis_result: dict) -> dict:
 
     features  = analysis_result.get('features', {})
     sim_edges = analysis_result.get('sim_edges', {})
+    excerpts  = analysis_result.get('excerpts', {})
 
     print(f"   Domains to upsert: {len(features)}")
     print(f"   Edges to upsert:   {len(sim_edges)}")
@@ -143,8 +148,8 @@ def build_graph(analysis_result: dict) -> dict:
         driver = get_driver()
         driver.verify_connectivity()
 
-        # Upsert nodes
-        nodes_created = upsert_domain_nodes(driver, features)
+        # Upsert nodes (with excerpts for evidence display)
+        nodes_created = upsert_domain_nodes(driver, features, excerpts)
         print(f"   ✅ {nodes_created} domain nodes upserted")
 
         # Upsert edges

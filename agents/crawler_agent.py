@@ -8,7 +8,7 @@ import time
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 # ── Config ───────────────────────────────────────────
@@ -121,7 +121,7 @@ def fetch_page(url: str) -> dict | None:
             "final_domain": final_domain,
             "text":         text,
             "links":        "|".join(links),
-            "timestamp":    datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+            "timestamp":    datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
             "status":       "ok",
         }
 
@@ -208,7 +208,7 @@ def crawl_domains(seed_domains: list) -> list:
     3. If neither works, report the failure (not silently skip)
     """
     global _failed_domains
-    _failed_domains = []
+    failed_this_run: list = []
 
     print(f"🕷️  Crawler Agent starting...")
     print(f"   Seed domains: {seed_domains}")
@@ -260,7 +260,7 @@ def crawl_domains(seed_domains: list) -> list:
                 print(f"    📦 Using fallback data for {domain}")
             else:
                 print(f"    ❌ FAILED: {domain} (no live content, no fallback)")
-                _failed_domains.append(domain)
+                failed_this_run.append(domain)
                 continue
 
         # Add to results if we have good data
@@ -280,6 +280,10 @@ def crawl_domains(seed_domains: list) -> list:
                             queue.append(linked_domain)
 
         time.sleep(SLEEP_SEC)
+
+    # Atomically replace the global so get_failed_domains() always returns
+    # a consistent snapshot from the most-recently-completed run.
+    _failed_domains = failed_this_run
 
     print()
     print(f"✅ Crawler Agent complete!")

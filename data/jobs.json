@@ -1,0 +1,312 @@
+{
+  "bd084c76-efee-4173-9e2d-632b7dcc31e5": {
+    "job_id": "bd084c76-efee-4173-9e2d-632b7dcc31e5",
+    "status": "completed",
+    "created_at": "2026-03-30T18:24:38.723781+00:00",
+    "summary": {
+      "ran_at": "2026-03-30T18:28:32.202481+00:00",
+      "whoisds_count": 0,
+      "reddit_count": 143,
+      "queued_unique": 40,
+      "batches": 4,
+      "results": 4,
+      "synthetic_batches": 3
+    },
+    "started_at": "2026-03-30T18:24:38.727942+00:00",
+    "finished_at": "2026-03-30T18:28:32.203436+00:00"
+  },
+  "be403bed-e36d-46db-b0cc-edc4ae5458fe": {
+    "job_id": "be403bed-e36d-46db-b0cc-edc4ae5458fe",
+    "job_type": "lookup_full_analysis",
+    "domain": "www.youtube.com",
+    "status": "completed",
+    "created_at": "2026-03-30T18:52:23.118882+00:00",
+    "result": {
+      "cluster_verdict": "SYNTHETIC",
+      "summary": "High Risk - Likely part of a fake network. 1 domain(s) were flagged with converging signals. Confidence: 87%. Note: 3 domain(s) could not be crawled: antigravity.google, instagram.com, gartner.com.",
+      "max_confidence": 0.87
+    },
+    "started_at": "2026-03-30T18:52:23.122858+00:00",
+    "finished_at": "2026-03-30T18:53:11.240258+00:00"
+  },
+  "adc3151a-5cc3-402b-ac2c-0977eb600f23": {
+    "job_id": "adc3151a-5cc3-402b-ac2c-0977eb600f23",
+    "job_type": "lookup_full_analysis",
+    "domain": "www.youtube.com",
+    "status": "completed",
+    "created_at": "2026-03-30T18:52:25.197322+00:00",
+    "result": {
+      "cluster_verdict": "SYNTHETIC",
+      "summary": "High Risk - Likely part of a fake network. 1 domain(s) were flagged with converging signals. Confidence: 87%. Note: 3 domain(s) could not be crawled: antigravity.google, instagram.com, gartner.com.",
+      "max_confidence": 0.87
+    },
+    "started_at": "2026-03-30T18:52:25.197895+00:00",
+    "finished_at": "2026-03-30T18:53:11.164247+00:00"
+  },
+  "5bd699f5-df76-4ff9-949a-53c977241dd8": {
+    "job_id": "5bd699f5-df76-4ff9-949a-53c977241dd8",
+    "job_type": "lookup_full_analysis",
+    "domain": "www.youtube.com",
+    "status": "completed",
+    "created_at": "2026-03-30T18:53:33.256358+00:00",
+    "result": {
+      "cluster_verdict": "SYNTHETIC",
+      "summary": "High Risk - Likely part of a fake network. 1 domain(s) were flagged with converging signals. Confidence: 87%. Note: 3 domain(s) could not be crawled: antigravity.google, instagram.com, gartner.com.",
+      "max_confidence": 0.87
+    },
+    "started_at": "2026-03-30T18:53:33.257517+00:00",
+    "finished_at": "2026-03-30T18:53:56.420165+00:00"
+  },
+  "b2ddfbc8-4aa3-4d83-beb7-84e923ca86b0": {
+    "job_id": "b2ddfbc8-4aa3-4d83-beb7-84e923ca86b0",
+    "job_type": "lookup_full_analysis",
+    "domain": "www.youtube.com",
+    "status": "completed",
+    "created_at": "2026-03-30T18:54:01.173301+00:00",
+    "result": {
+      "cluster_verdict": "SYNTHETIC",
+      "summary": "High Risk - Likely part of a fake network. 1 domain(s) were flagged with converging signals. Confidence: 87%. Note: 3 domain(s) could not be crawled: antigravity.google, instagram.com, gartner.com.",
+      "max_confidence": 0.87
+    },
+    "started_at": "2026-03-30T18:54:01.174955+00:00",
+    "finished_at": "2026-03-30T18:54:27.563682+00:00"
+  },
+  "8d891516-f60f-4a3f-ab1f-90c4fbd06c26": {
+    "job_id": "8d891516-f60f-4a3f-ab1f-90c4fbd06c26",
+    "job_type": "lookup_full_analysis",
+    "domain": "www.youtube.com",
+    "status": "completed",
+    "created_at": "2026-03-30T18:54:49.231947+00:00",
+    "result": {
+      "cluster_verdict": "SYNTHETIC",
+      "summary": "High Risk - Likely part of a fake network. 1 domain(s) were flagged with converging signals. Confidence: 88%. Note: 3 domain(s) could not be crawled: antigravity.google, instagram.com, gartner.com.",
+      "max_confidence": 0.88
+    },
+    "started_at": "2026-03-30T18:54:49.233018+00:00",
+    "finished_at": "2026-03-30T18:55:11.551196+00:00"
+  },
+  "99eecbb5-39bf-4c35-b9ca-6c53df98747b": {
+    "job_id": "99eecbb5-39bf-4c35-b9ca-6c53df98747b",
+    "job_type": "lookup_full_analysis",
+    "domain": "www.northeastern.edu",
+    "status": "completed",
+    "created_at": "2026-03-30T19:00:32.267072+00:00",
+    "result": {
+      "cluster_verdict": "SYNTHETIC",
+      "summary": "High Risk - Likely part of a fake network. 1 domain(s) were flagged with converging signals. Confidence: 84%. Note: 5 domain(s) could not be crawled: instagram.com, support.x.com, help.x.com, business.twitter.com, developer.x.com.",
+      "max_confidence": 0.84
+    },
+    "started_at": "2026-03-30T19:00:32.269483+00:00",
+    "finished_at": "2026-03-30T19:01:21.261096+00:00"
+  },
+  "52bed805-b57c-4c90-9b4a-28a310c4a248": {
+    "job_id": "52bed805-b57c-4c90-9b4a-28a310c4a248",
+    "job_type": "lookup_full_analysis",
+    "domain": "www.northeastern.edu",
+    "status": "completed",
+    "created_at": "2026-03-30T19:01:44.768845+00:00",
+    "result": {
+      "cluster_verdict": "REVIEW",
+      "summary": "Suspicious - Some warning signs detected. 17 domain(s) need a closer look. Only one major signal fired, so this is not a confirmed synthetic network yet. Note: 5 domain(s) could not be crawled: instagram.com, support.x.com, help.x.com, business.twitter.com, developer.x.com.",
+      "max_confidence": 0.83
+    },
+    "started_at": "2026-03-30T19:01:44.769832+00:00",
+    "finished_at": "2026-03-30T19:02:17.166589+00:00"
+  },
+  "62f367ea-cb03-4e67-9a8f-55322430f11e": {
+    "job_id": "62f367ea-cb03-4e67-9a8f-55322430f11e",
+    "job_type": "lookup_full_analysis",
+    "domain": "www.northeastern.edu",
+    "status": "completed",
+    "created_at": "2026-03-30T19:04:20.950535+00:00",
+    "result": {
+      "cluster_verdict": "SYNTHETIC",
+      "summary": "High Risk - Likely part of a fake network. 1 domain(s) were flagged with converging signals. Confidence: 88%. Note: 6 domain(s) could not be crawled: tiktok.com, instagram.com, antigravity.google, mail.google.com, blog.dart.dev, dartpad.dev.",
+      "max_confidence": 0.88
+    },
+    "started_at": "2026-03-30T19:04:20.954797+00:00",
+    "finished_at": "2026-03-30T19:05:16.592447+00:00"
+  },
+  "5fb6b8e2-be78-489a-ba2b-0da268fbcb6f": {
+    "job_id": "5fb6b8e2-be78-489a-ba2b-0da268fbcb6f",
+    "job_type": "lookup_full_analysis",
+    "domain": "www.northeastern.edu",
+    "status": "completed",
+    "created_at": "2026-03-30T19:06:15.999014+00:00",
+    "result": {
+      "cluster_verdict": "SYNTHETIC",
+      "summary": "High Risk - Likely part of a fake network. 1 domain(s) were flagged with converging signals. Confidence: 88%. Note: 6 domain(s) could not be crawled: tiktok.com, instagram.com, antigravity.google, mail.google.com, blog.dart.dev, dartpad.dev.",
+      "max_confidence": 0.88
+    },
+    "started_at": "2026-03-30T19:06:16.001625+00:00",
+    "finished_at": "2026-03-30T19:06:52.000171+00:00"
+  },
+  "7a9d6e6a-cc4e-4ba4-9e7b-4f5c771b644a": {
+    "job_id": "7a9d6e6a-cc4e-4ba4-9e7b-4f5c771b644a",
+    "job_type": "lookup_full_analysis",
+    "domain": "www.northeastern.edu",
+    "status": "completed",
+    "created_at": "2026-03-30T19:10:26.355003+00:00",
+    "result": {
+      "cluster_verdict": "SYNTHETIC",
+      "summary": "High Risk - Likely part of a fake network. 2 domain(s) were flagged with converging signals. Confidence: 89%. Note: 6 domain(s) could not be crawled: tiktok.com, instagram.com, antigravity.google, mail.google.com, blog.dart.dev, dartpad.dev.",
+      "max_confidence": 0.89
+    },
+    "started_at": "2026-03-30T19:10:26.357193+00:00",
+    "finished_at": "2026-03-30T19:11:03.917832+00:00"
+  },
+  "802d588a-3d9e-4afb-b8bf-31a48ddc1306": {
+    "job_id": "802d588a-3d9e-4afb-b8bf-31a48ddc1306",
+    "job_type": "lookup_full_analysis",
+    "domain": "www.northeastern.edu",
+    "status": "completed",
+    "created_at": "2026-03-30T19:11:29.451210+00:00",
+    "result": {
+      "cluster_verdict": "SYNTHETIC",
+      "summary": "High Risk - Likely part of a fake network. 1 domain(s) were flagged with converging signals. Confidence: 88%. Note: 6 domain(s) could not be crawled: tiktok.com, instagram.com, antigravity.google, mail.google.com, blog.dart.dev, dartpad.dev.",
+      "max_confidence": 0.88
+    },
+    "started_at": "2026-03-30T19:11:29.452295+00:00",
+    "finished_at": "2026-03-30T19:11:55.341502+00:00"
+  },
+  "21922e62-db39-429d-aa84-68fff587095b": {
+    "job_id": "21922e62-db39-429d-aa84-68fff587095b",
+    "job_type": "lookup_full_analysis",
+    "domain": "www.northeastern.edu",
+    "status": "completed",
+    "created_at": "2026-03-30T19:16:57.218445+00:00",
+    "result": {
+      "cluster_verdict": "REVIEW",
+      "summary": "Suspicious - Some warning signs detected. 18 domain(s) need a closer look. Only one major signal fired, so this is not a confirmed synthetic network yet. Note: 6 domain(s) could not be crawled: tiktok.com, instagram.com, antigravity.google, mail.google.com, blog.dart.dev, dartpad.dev.",
+      "max_confidence": 0.87
+    },
+    "started_at": "2026-03-30T19:16:57.220428+00:00",
+    "finished_at": "2026-03-30T19:17:39.412906+00:00"
+  },
+  "ad026577-aa42-4662-a9ac-bc85a3b2174f": {
+    "job_id": "ad026577-aa42-4662-a9ac-bc85a3b2174f",
+    "job_type": "lookup_full_analysis",
+    "domain": "www.northeastern.edu",
+    "status": "completed",
+    "created_at": "2026-03-30T19:16:58.353518+00:00",
+    "result": {
+      "cluster_verdict": "REVIEW",
+      "summary": "Suspicious - Some warning signs detected. 18 domain(s) need a closer look. Only one major signal fired, so this is not a confirmed synthetic network yet. Note: 6 domain(s) could not be crawled: tiktok.com, instagram.com, antigravity.google, mail.google.com, blog.dart.dev, dartpad.dev.",
+      "max_confidence": 0.87
+    },
+    "started_at": "2026-03-30T19:16:58.355462+00:00",
+    "finished_at": "2026-03-30T19:17:39.516472+00:00"
+  },
+  "4eb8bbb9-4ec7-4add-8b42-24c7146dc1c1": {
+    "job_id": "4eb8bbb9-4ec7-4add-8b42-24c7146dc1c1",
+    "job_type": "lookup_full_analysis",
+    "domain": "www.northeastern.edu",
+    "status": "completed",
+    "created_at": "2026-03-30T19:18:18.060678+00:00",
+    "result": {
+      "cluster_verdict": "SYNTHETIC",
+      "summary": "High Risk - Likely part of a fake network. 1 domain(s) were flagged with converging signals. Confidence: 88%. Note: 6 domain(s) could not be crawled: tiktok.com, instagram.com, antigravity.google, mail.google.com, blog.dart.dev, dartpad.dev.",
+      "max_confidence": 0.88
+    },
+    "started_at": "2026-03-30T19:18:18.068720+00:00",
+    "finished_at": "2026-03-30T19:18:49.755128+00:00"
+  },
+  "48302de0-90d0-4fba-9327-f84f18bd353e": {
+    "job_id": "48302de0-90d0-4fba-9327-f84f18bd353e",
+    "job_type": "lookup_full_analysis",
+    "domain": "www.northeastern.edu",
+    "status": "completed",
+    "created_at": "2026-03-30T19:18:19.338905+00:00",
+    "result": {
+      "cluster_verdict": "SYNTHETIC",
+      "summary": "High Risk - Likely part of a fake network. 1 domain(s) were flagged with converging signals. Confidence: 88%. Note: 6 domain(s) could not be crawled: tiktok.com, instagram.com, antigravity.google, mail.google.com, blog.dart.dev, dartpad.dev.",
+      "max_confidence": 0.88
+    },
+    "started_at": "2026-03-30T19:18:19.342260+00:00",
+    "finished_at": "2026-03-30T19:18:49.566866+00:00"
+  },
+  "ac647cf7-a209-4fa9-9591-7e5596ab6e9d": {
+    "job_id": "ac647cf7-a209-4fa9-9591-7e5596ab6e9d",
+    "job_type": "lookup_full_analysis",
+    "domain": "www.northeastern.edu",
+    "status": "completed",
+    "created_at": "2026-03-30T19:24:36.017155+00:00",
+    "result": {
+      "cluster_verdict": "SYNTHETIC",
+      "summary": "High Risk - Likely part of a fake network. 1 domain(s) were flagged with converging signals. Confidence: 87%. Note: 6 domain(s) could not be crawled: tiktok.com, instagram.com, antigravity.google, mail.google.com, blog.dart.dev, dartpad.dev.",
+      "max_confidence": 0.87
+    },
+    "started_at": "2026-03-30T19:24:36.021241+00:00",
+    "finished_at": "2026-03-30T19:25:24.777993+00:00"
+  },
+  "c090d244-9013-4fbf-a9ad-35ef50b1e68c": {
+    "job_id": "c090d244-9013-4fbf-a9ad-35ef50b1e68c",
+    "job_type": "lookup_full_analysis",
+    "domain": "www.northeastern.edu",
+    "status": "completed",
+    "created_at": "2026-03-30T19:35:23.485902+00:00",
+    "result": {
+      "cluster_verdict": "SYNTHETIC",
+      "summary": "High Risk - Likely part of a fake network. 1 domain(s) were flagged with converging signals. Confidence: 88%. Note: 6 domain(s) could not be crawled: tiktok.com, instagram.com, antigravity.google, mail.google.com, blog.dart.dev, dartpad.dev.",
+      "max_confidence": 0.88
+    },
+    "started_at": "2026-03-30T19:35:23.489595+00:00",
+    "finished_at": "2026-03-30T19:35:57.438043+00:00"
+  },
+  "ac62a566-cbaf-4eec-9da0-33727a946903": {
+    "job_id": "ac62a566-cbaf-4eec-9da0-33727a946903",
+    "job_type": "lookup_full_analysis",
+    "domain": "www.northeastern.edu",
+    "status": "completed",
+    "created_at": "2026-03-30T19:42:01.054412+00:00",
+    "result": {
+      "cluster_verdict": "SYNTHETIC",
+      "summary": "High Risk - Likely part of a fake network. 1 domain(s) were flagged with converging signals. Confidence: 88%. Note: 7 domain(s) could not be crawled: tiktok.com, instagram.com, antigravity.google, learning.linkedin.com, mail.google.com, blog.dart.dev, dartpad.dev.",
+      "max_confidence": 0.88
+    },
+    "started_at": "2026-03-30T19:42:01.057206+00:00",
+    "finished_at": "2026-03-30T19:42:38.191330+00:00"
+  },
+  "1a2b109c-5004-45fd-8ccc-7a3060e5b320": {
+    "job_id": "1a2b109c-5004-45fd-8ccc-7a3060e5b320",
+    "job_type": "lookup_full_analysis",
+    "domain": "www.northeastern.edu",
+    "status": "completed",
+    "created_at": "2026-03-30T19:42:41.502366+00:00",
+    "result": {
+      "cluster_verdict": "SYNTHETIC",
+      "summary": "High Risk - Likely part of a fake network. 2 domain(s) were flagged with converging signals. Confidence: 87%. Note: 6 domain(s) could not be crawled: tiktok.com, instagram.com, antigravity.google, mail.google.com, blog.dart.dev, dartpad.dev.",
+      "max_confidence": 0.87
+    },
+    "started_at": "2026-03-30T19:42:41.504142+00:00",
+    "finished_at": "2026-03-30T19:43:07.064278+00:00"
+  },
+  "55c0c15f-6b26-48ca-8461-68a07795e6bc": {
+    "job_id": "55c0c15f-6b26-48ca-8461-68a07795e6bc",
+    "job_type": "lookup_full_analysis",
+    "domain": "www.google.com",
+    "status": "completed",
+    "created_at": "2026-03-30T19:43:01.253785+00:00",
+    "result": {
+      "cluster_verdict": "ORGANIC",
+      "summary": "Looks Legitimate - No warning signs were detected. All 1 domains currently appear organic.",
+      "max_confidence": 0.95
+    },
+    "started_at": "2026-03-30T19:43:01.255279+00:00",
+    "finished_at": "2026-03-30T19:43:02.690805+00:00"
+  },
+  "07acadb5-6c2c-4cfe-ae30-16cb3a9e33db": {
+    "job_id": "07acadb5-6c2c-4cfe-ae30-16cb3a9e33db",
+    "job_type": "lookup_full_analysis",
+    "domain": "www.google.com",
+    "status": "completed",
+    "created_at": "2026-03-30T19:43:08.026008+00:00",
+    "result": {
+      "cluster_verdict": "ORGANIC",
+      "summary": "Looks Legitimate - No warning signs were detected. All 1 domains currently appear organic.",
+      "max_confidence": 0.95
+    },
+    "started_at": "2026-03-30T19:43:08.028180+00:00",
+    "finished_at": "2026-03-30T19:43:09.477195+00:00"
+  }
+}
