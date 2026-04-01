@@ -50,6 +50,94 @@ def is_same_site(domain_a: str, domain_b: str) -> bool:
     return get_parent_domain(domain_a) == get_parent_domain(domain_b)
 
 
+def _load_corpus() -> list:
+    """Load fallback CSV domains with text for corpus comparison."""
+    import os
+    import pandas as pd
+    corpus = []
+    for path in ['data/domains_clean.csv', 'data/synthetic_ecosystem.csv',
+                 'data/domains_raw.csv', 'data/ground_truth.csv']:
+        if not os.path.exists(path):
+            continue
+        try:
+            df = pd.read_csv(path)
+            for _, row in df.iterrows():
+                domain = str(row.get('domain', '')).strip().lower()
+                if not domain:
+                    continue
+                text = ''
+                for col in ['text', 'content', 'page_text', 'body']:
+                    if col in df.columns and pd.notna(row.get(col)):
+                        text = str(row[col])[:1000]
+                        break
+                if text and len(text) > 50:
+                    corpus.append({'domain': domain, 'text': text})
+        except Exception:
+            continue
+    # deduplicate by domain
+    seen = set()
+    deduped = []
+    for d in corpus:
+        if d['domain'] not in seen:
+            seen.add(d['domain'])
+            deduped.append(d)
+    return deduped
+
+
+def _compute_signal1_against_corpus(domains_data: list) -> dict:
+    """
+    When only one domain was crawled, compare it against the fallback corpus
+    to surface similar domains as evidence pairs.
+    """
+    corpus = _load_corpus()
+    if not corpus:
+        return {'domain_scores': {}, 'edges': {}, 'excerpts': {}}
+
+    seed = domains_data[0]
+    seed_domain = seed['domain']
+    seed_text   = seed.get('text', '')[:1000]
+    excerpts    = {seed_domain: seed.get('text', '')[:400].strip()}
+
+    # Exclude the seed domain itself from corpus
+    corpus = [d for d in corpus if d['domain'] != seed_domain]
+    if not corpus:
+        return {'domain_scores': {}, 'edges': {}, 'excerpts': excerpts}
+
+    model = get_model()
+    all_texts   = [seed_text] + [d['text'] for d in corpus]
+    all_domains = [seed_domain] + [d['domain'] for d in corpus]
+    embeddings  = model.encode(all_texts, show_progress_bar=False)
+    sim_matrix  = cosine_similarity(embeddings)
+
+    edges = {}
+    flagged_pairs = []
+    for j in range(1, len(all_domains)):
+        sim = float(sim_matrix[0][j])
+        if sim >= SIM_THRESHOLD:
+            pair_key = "|||".join(sorted([seed_domain, all_domains[j]]))
+            if pair_key not in edges:
+                edges[pair_key] = round(sim, 4)
+                excerpts[all_domains[j]] = corpus[j - 1]['text'][:400].strip()
+                flagged_pairs.append((all_domains[j], sim))
+
+    max_sim = max((float(sim_matrix[0][j]) for j in range(1, len(all_domains))), default=0.0)
+    avg_sim = float(np.mean([float(sim_matrix[0][j]) for j in range(1, len(all_domains))]))
+
+    print(f"  ✅ Signal 1 (corpus): {len(edges)} similar pairs found for {seed_domain}")
+    return {
+        'domain_scores': {
+            seed_domain: {
+                'avg_similarity':       round(avg_sim, 4),
+                'max_similarity':       round(max_sim, 4),
+                'similarity_flag':      1 if max_sim >= SIM_THRESHOLD else 0,
+                'similar_domain_count': len(flagged_pairs),
+            }
+        },
+        'edges':    edges,
+        'excerpts': excerpts,
+    }
+
+
 def compute_signal1_similarity(domains_data: list) -> dict:
     """
     Signal 1: Content similarity using Sentence Transformers.
@@ -58,7 +146,9 @@ def compute_signal1_similarity(domains_data: list) -> dict:
     print("  📐 Computing Signal 1 (content similarity)...")
 
     if len(domains_data) < 2:
-        return {'domain_scores': {}, 'edges': {}}
+        # Single domain — compare against fallback corpus to find similar domains
+        return _compute_signal1_against_corpus(domains_data)
+
 
     model   = get_model()
     texts   = [d.get('text', '')[:1000] for d in domains_data]

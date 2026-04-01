@@ -205,6 +205,75 @@ def _heuristic_preliminary_verdict(domain: str) -> Dict:
     }
 
 
+def _compute_evidence_from_graph(domain: str) -> List[Dict]:
+    """
+    Fallback evidence computation: fetch the stored excerpt for `domain`
+    from Neo4j, then use sentence-transformers to compare it against all
+    other stored excerpts and return pairs above the similarity threshold.
+    Called when the pipeline-based signal 1 produced no evidence pairs
+    (e.g. single-domain crawl where all linked sites were unreachable).
+    """
+    try:
+        driver = get_neo4j_driver()
+        with driver.session() as session:
+            # Fetch the target domain's excerpt
+            row = session.run(
+                "MATCH (d:Domain {domain: $domain}) RETURN d.excerpt AS excerpt",
+                domain=domain,
+            ).single()
+            seed_excerpt = (row.get("excerpt") or "") if row else ""
+            if not seed_excerpt or len(seed_excerpt) < 50:
+                return []
+
+            # Fetch up to 300 other domains that have stored excerpts
+            rows = session.run(
+                """
+                MATCH (d:Domain)
+                WHERE d.domain <> $domain AND d.excerpt IS NOT NULL
+                      AND size(d.excerpt) > 50
+                RETURN d.domain AS other_domain, d.excerpt AS excerpt
+                LIMIT 300
+                """,
+                domain=domain,
+            ).data()
+        driver.close()
+
+        if not rows:
+            return []
+
+        from sentence_transformers import SentenceTransformer
+        from sklearn.metrics.pairwise import cosine_similarity as cos_sim
+        from config.signal_config import SIM_THRESHOLD, MODEL_NAME
+
+        model = SentenceTransformer(MODEL_NAME)
+        other_domains  = [r["other_domain"] for r in rows]
+        other_excerpts = [r["excerpt"][:1000] for r in rows]
+
+        all_texts = [seed_excerpt[:1000]] + other_excerpts
+        embeddings = model.encode(all_texts, show_progress_bar=False)
+        sims = cos_sim(embeddings[:1], embeddings[1:])[0]
+
+        # Use a lower threshold for graph-corpus comparison — we're comparing
+        # homepage excerpts across diverse sites, not coordinated farm content.
+        GRAPH_SIM_THRESHOLD = min(SIM_THRESHOLD, 0.35)
+        evidence_pairs = []
+        for idx, sim in enumerate(sims):
+            if float(sim) >= GRAPH_SIM_THRESHOLD:
+                evidence_pairs.append({
+                    "domain_a":   domain,
+                    "domain_b":   other_domains[idx],
+                    "similarity": round(float(sim), 4),
+                    "excerpt_a":  seed_excerpt[:400].strip(),
+                    "excerpt_b":  other_excerpts[idx][:400].strip(),
+                })
+        evidence_pairs.sort(key=lambda x: x["similarity"], reverse=True)
+        print(f"  📎 Graph evidence fallback: {len(evidence_pairs)} pairs for {domain}")
+        return evidence_pairs
+    except Exception as e:
+        print(f"  ⚠️  Graph evidence fallback failed: {e}")
+        return []
+
+
 def _run_lookup_analysis_job(job_id: str, domain: str) -> None:
     _jobs[job_id]["status"] = "running"
     _jobs[job_id]["started_at"] = _now_iso()
@@ -212,29 +281,16 @@ def _run_lookup_analysis_job(job_id: str, domain: str) -> None:
     try:
         from agents.crew import run_analysis
 
-        # Include related domains already in the graph so similarity signal
-        # can fire (signal 1 requires ≥2 domains to compare).
-        seed_domains = [domain]
-        try:
-            _neo_driver = get_neo4j_driver()
-            with _neo_driver.session() as _s:
-                _rows = _s.run(
-                    """
-                    MATCH (d:Domain {domain: $domain})-[:SIMILAR_TO]-(other:Domain)
-                    RETURN other.domain AS other_domain
-                    LIMIT 9
-                    """,
-                    domain=domain,
-                )
-                for _row in _rows:
-                    od = _row.get("other_domain")
-                    if od and od not in seed_domains:
-                        seed_domains.append(od)
-            _neo_driver.close()
-        except Exception:
-            pass  # proceed with just the single domain if graph lookup fails
+        # Run the full pipeline. Signal 1 (similarity) needs ≥2 domains;
+        # the crawler follows outgoing links from the seed page so in most
+        # cases several domains end up in crawled_data automatically.
+        result = run_analysis([domain])
 
-        result = run_analysis(seed_domains)
+        # If similarity produced no evidence pairs, do a second pass:
+        # fetch the stored excerpt for this domain from Neo4j and compare
+        # it in-process against all other stored excerpts to find matches.
+        if not result.get("evidence_pairs"):
+            result["evidence_pairs"] = _compute_evidence_from_graph(domain)
         _jobs[job_id]["status"] = "completed"
         _jobs[job_id]["finished_at"] = _now_iso()
         # Store the full result on the job so the frontend can use it
