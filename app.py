@@ -92,11 +92,11 @@ with st.sidebar:
     st.subheader("📖 How It Works")
     st.markdown("""
     1. **Crawl** — fetch content from seed domains + linked sites
-    2. **Analyze** — compute 3 detection signals
+    2. **Analyze** — compute 7 detection signals
     3. **Graph** — build domain network in Neo4j
     4. **Verdict** — GNN classifies clusters
 
-    **2-of-3 rule:** flagged SYNTHETIC only when 2+ signals converge.
+    **3-of-7 rule:** flagged SYNTHETIC only when 3+ signals converge.
     """)
 
     st.divider()
@@ -285,6 +285,19 @@ with tab_analyze:
             pass  # The job-poll banner above already tells the user analysis is running
         else:
             st.info(f"📋 {summary}")
+            if verdict == "REVIEW" and analysis_type != "preliminary":
+                max_signals = max(
+                    (dv.get("signals_triggered", 0) for dv in domain_verdicts.values()),
+                    default=0
+                )
+                st.caption(
+                    f"**Why Suspicious and not High Risk?** "
+                    f"The detector requires 3 or more independent signals to confirm a coordinated fake network "
+                    f"(the 3-of-7 convergence rule). The highest signal count here is {max_signals}/7. "
+                    f"One or two signals can have innocent explanations — for example, two right-leaning outlets "
+                    f"will naturally share similar vocabulary without being coordinated. "
+                    f"Treat this as a lead worth investigating, not a confirmed verdict."
+                )
 
         # Metrics row
         c1, c2, c3, c4 = st.columns(4)
@@ -298,7 +311,10 @@ with tab_analyze:
 
         st.divider()
 
-        evidence_pairs = result.get("evidence_pairs", [])
+        evidence_pairs   = result.get("evidence_pairs", [])
+        hosting_evidence = result.get("hosting_evidence", [])
+        author_evidence  = result.get("author_evidence", [])
+        total_evidence   = len(evidence_pairs) + len(hosting_evidence) + len(author_evidence)
 
         # Result sub-tabs
         r_tab1, r_tab2, r_tab3, r_tab4, r_tab5 = st.tabs([
@@ -306,95 +322,176 @@ with tab_analyze:
             "📊 Signal Analysis",
             "🤖 GPT-4 Analysis",
             "📋 Domain Details",
-            f"🔍 Evidence ({len(evidence_pairs)})",
+            f"🔍 Evidence ({total_evidence})",
         ])
 
         # ── Network Graph ────────────────────────────
         with r_tab1:
-            st.subheader("Domain Network Graph")
-            graph_data = api_get("/graph")
-            if graph_data:
-                nodes = graph_data.get("nodes", [])
-                edges = graph_data.get("edges", [])
-                if nodes:
-                    n = len(nodes)
-                    node_x = [math.cos(2 * math.pi * i / max(n, 1)) for i in range(n)]
-                    node_y = [math.sin(2 * math.pi * i / max(n, 1)) for i in range(n)]
-                    pos = {nodes[i]["id"]: (node_x[i], node_y[i]) for i in range(n)}
+            st.subheader("Domain Similarity Network")
+            st.caption(
+                "Shows the queried domain (large center node) and every domain "
+                "that shares similar content with it. Hover a node to see details."
+            )
 
+            # Get the queried domain from session state
+            graph_domain = st.session_state.get("lookup_domain", "")
+            graph_data = api_get(f"/graph/neighborhood/{graph_domain}") if graph_domain else None
+
+            cmap = {"SYNTHETIC": "#e74c3c", "REVIEW": "#e67e22", "ORGANIC": "#27ae60"}
+
+            if graph_data and graph_data.get("nodes"):
+                nodes = graph_data["nodes"]
+                edges = graph_data["edges"]
+
+                seed_nodes = [nd for nd in nodes if nd.get("is_seed")]
+                neighbor_nodes = [nd for nd in nodes if not nd.get("is_seed")]
+
+                # If no neighbors, just show a centered message — no chart needed
+                if not neighbor_nodes:
+                    seed_verdict = seed_nodes[0].get("verdict", "ORGANIC") if seed_nodes else "ORGANIC"
+                    color = {"SYNTHETIC": "🔴", "REVIEW": "🟡"}.get(seed_verdict, "🟢")
+                    st.markdown(f"### {color} {graph_domain}")
+                    st.info(
+                        f"**{graph_domain}** is in the database but has no similar domains connected to it yet. "
+                        "This means no other stored domain exceeded the similarity threshold. "
+                        "Check the **Evidence** tab — corpus comparisons may have found matches there."
+                    )
+                else:
+                # Position: seed at center, neighbors in a circle around it
+                    pos = {}
+                    if seed_nodes:
+                        pos[seed_nodes[0]["id"]] = (0.0, 0.0)
+
+                    nb_count = len(neighbor_nodes)
+                    for idx, nd in enumerate(neighbor_nodes):
+                        angle = 2 * math.pi * idx / max(nb_count, 1)
+                        pos[nd["id"]] = (math.cos(angle), math.sin(angle))
+
+                    # Draw edges
                     ex, ey = [], []
-                    for e in edges[:100]:
+                    for e in edges:
                         s, t = pos.get(e["source"]), pos.get(e["target"])
-                        if s and t:
+                        if s is not None and t is not None:
                             ex += [s[0], t[0], None]
                             ey += [s[1], t[1], None]
 
-                    cmap = {"SYNTHETIC": "#e74c3c", "REVIEW": "#e67e22", "ORGANIC": "#27ae60"}
+                    # Draw nodes
+                    placed_nodes = [nd for nd in nodes if nd["id"] in pos]
+                    node_x      = [pos[nd["id"]][0] for nd in placed_nodes]
+                    node_y      = [pos[nd["id"]][1] for nd in placed_nodes]
+                    node_colors = [cmap.get(nd.get("verdict", "ORGANIC"), "#888") for nd in placed_nodes]
+                    node_sizes  = [22 if nd.get("is_seed") else 12 for nd in placed_nodes]
+                    node_labels = [nd["domain"] for nd in placed_nodes]
+                    hover_texts = [
+                        f"<b>{nd['domain']}</b><br>"
+                        f"Verdict: {nd.get('verdict','ORGANIC')}<br>"
+                        f"Signals triggered: {nd.get('signals', 0)}"
+                        for nd in placed_nodes
+                    ]
+
                     fig = go.Figure(
                         data=[
-                            go.Scatter(x=ex, y=ey, mode="lines",
-                                       line=dict(width=0.5, color="#444"),
-                                       hoverinfo="none"),
                             go.Scatter(
-                                x=node_x, y=node_y, mode="markers",
-                                hovertemplate="<b>%{customdata[0]}</b><br>Verdict: %{customdata[1]}<br>Signals: %{customdata[2]}<extra></extra>",
-                                customdata=[[nd["domain"], nd.get("verdict", "ORGANIC"), nd.get("signals", 0)] for nd in nodes],
-                                marker=dict(size=10, color=[cmap.get(nd.get("verdict", "ORGANIC"), "#888") for nd in nodes],
-                                            line=dict(width=1, color="#fff")),
+                                x=ex, y=ey, mode="lines",
+                                line=dict(width=1, color="#555"),
+                                hoverinfo="none",
+                            ),
+                            go.Scatter(
+                                x=node_x, y=node_y,
+                                mode="markers+text",
+                                text=node_labels,
+                                textposition="top center",
+                                textfont=dict(size=10, color="#cccccc"),
+                                hovertemplate="%{customdata}<extra></extra>",
+                                customdata=hover_texts,
+                                marker=dict(
+                                    size=node_sizes,
+                                    color=node_colors,
+                                    line=dict(width=1.5, color="#ffffff"),
+                                ),
                             ),
                         ],
                         layout=go.Layout(
-                            showlegend=False, hovermode="closest",
-                            paper_bgcolor="#0e1117", plot_bgcolor="#0e1117",
-                            xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-                            yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-                            height=500, margin=dict(l=20, r=20, t=20, b=20),
+                            showlegend=False,
+                            hovermode="closest",
+                            paper_bgcolor="#0e1117",
+                            plot_bgcolor="#0e1117",
+                            xaxis=dict(showgrid=False, zeroline=False, showticklabels=False, range=[-1.4, 1.4]),
+                            yaxis=dict(showgrid=False, zeroline=False, showticklabels=False, range=[-1.4, 1.4]),
+                            height=520,
+                            margin=dict(l=20, r=20, t=20, b=20),
                         ),
                     )
                     st.plotly_chart(fig, use_container_width=True)
-                    st.caption("🔴 Synthetic  🟠 Review  🟢 Organic — hover for details")
-                else:
-                    st.info("Graph is empty — run an analysis first")
+
+                    col_l, col_m, col_r = st.columns(3)
+                    col_l.markdown("🔴 **Synthetic**")
+                    col_m.markdown("🟡 **Review**")
+                    col_r.markdown("🟢 **Organic**")
+                    st.caption(
+                        f"**{graph_domain}** shares similar content with **{len(neighbor_nodes)}** other domain(s). "
+                        "Lines connect domains above the similarity threshold. Hover nodes for details."
+                    )
+            elif graph_domain:
+                st.info(
+                    f"**{graph_domain}** has not been stored in the graph database yet. "
+                    "Run an analysis first, then return to this tab."
+                )
             else:
-                st.warning("Graph visualization unavailable")
+                st.info("Search for a domain first — the graph will show its similarity network here.")
 
         # ── Signal Analysis ──────────────────────────
         with r_tab2:
             st.subheader("Signal Analysis")
+            st.caption("Each of the 7 signals is an independent check. Red = triggered. 3 or more triggers = high risk.")
             if domain_verdicts:
                 rows = []
                 for d, dv in domain_verdicts.items():
                     rows.append({
-                        "Domain": d[:35],
-                        "Synthetic Prob": round(dv.get("confidence", 0), 4),
-                        "Signals": dv.get("signals_triggered", 0),
-                        "Verdict": dv.get("verdict", "ORGANIC"),
-                        "Similarity": dv.get("signal_1_similarity", 0),
-                        "Cadence": dv.get("signal_2_cadence", 0),
-                        "WHOIS": dv.get("signal_3_whois", 0),
+                        "Domain":      d[:35],
+                        "Verdict":     dv.get("verdict", "ORGANIC"),
+                        "Signals":     dv.get("signals_triggered", 0),
+                        "1·Similarity": dv.get("signal_1_similarity", 0),
+                        "2·Cadence":   dv.get("signal_2_cadence", 0),
+                        "3·WHOIS":     dv.get("signal_3_whois", 0),
+                        "4·Hosting":   dv.get("signal_4_hosting", 0),
+                        "5·Links":     dv.get("signal_5_link_network", 0),
+                        "6·Wayback":   dv.get("signal_6_wayback", 0),
+                        "7·Authors":   dv.get("signal_7_authors", 0),
                     })
                 df_sig = pd.DataFrame(rows)
-
                 cmap = {"SYNTHETIC": "#e74c3c", "REVIEW": "#e67e22", "ORGANIC": "#27ae60"}
 
-                fig1 = px.bar(df_sig, x="Domain", y="Synthetic Prob", color="Verdict",
-                              color_discrete_map=cmap, title="Synthetic Probability by Domain")
-                fig1.update_layout(paper_bgcolor="#0e1117", plot_bgcolor="#0e1117",
-                                   font_color="#e0e0e0", xaxis_tickangle=-45)
-                st.plotly_chart(fig1, use_container_width=True)
-
-                heat = df_sig[["Domain", "Similarity", "Cadence", "WHOIS"]].set_index("Domain")
-                fig2 = px.imshow(heat.T, color_continuous_scale=["#1a4a1a", "#e74c3c"],
-                                 title="Signal Heatmap — Red = Triggered", aspect="auto")
-                fig2.update_layout(paper_bgcolor="#0e1117", plot_bgcolor="#0e1117",
-                                   font_color="#e0e0e0")
+                heat_cols = ["1·Similarity","2·Cadence","3·WHOIS","4·Hosting","5·Links","6·Wayback","7·Authors"]
+                heat = df_sig[["Domain"] + heat_cols].set_index("Domain")
+                fig2 = px.imshow(
+                    heat.T,
+                    color_continuous_scale=["#1a2a1a", "#e74c3c"],
+                    zmin=0, zmax=1,
+                    title="Signal Heatmap — Red = Triggered, Green = Clear",
+                    aspect="auto",
+                    labels={"x": "Domain", "y": "Signal", "color": "Triggered"},
+                )
+                fig2.update_layout(paper_bgcolor="#0e1117", plot_bgcolor="#0e1117", font_color="#e0e0e0")
                 st.plotly_chart(fig2, use_container_width=True)
 
                 c1, c2, c3 = st.columns(3)
-                with c1: st.metric("Avg Synthetic Prob", f"{df_sig['Synthetic Prob'].mean():.1%}")
-                with c2: st.metric("Max Signals", f"{df_sig['Signals'].max()}/3")
-                with c3: st.metric("Above 50%", len(df_sig[df_sig["Synthetic Prob"] > 0.5]))
-                st.dataframe(df_sig, use_container_width=True)
+                with c1: st.metric("Max signals fired", f"{int(df_sig['Signals'].max())}/7")
+                with c2: st.metric("High risk domains", len(df_sig[df_sig["Signals"] >= 3]))
+                with c3: st.metric("Needs review", len(df_sig[(df_sig["Signals"] >= 1) & (df_sig["Signals"] < 3)]))
+
+                st.caption("**What each signal means:**")
+                st.markdown(
+                    "| # | Signal | What it checks |\n"
+                    "|---|--------|----------------|\n"
+                    "| 1 | Similarity | Homepage text is unusually similar to other known domains |\n"
+                    "| 2 | Cadence | Publishing time pattern looks anomalous |\n"
+                    "| 3 | WHOIS | Domain is very new or has suspicious registration pattern |\n"
+                    "| 4 | Hosting | Shares IP address or hosting provider with another domain |\n"
+                    "| 5 | Links | Domains in the cluster mutually link to each other |\n"
+                    "| 6 | Wayback | Site has almost no archive history (very new or recently faked) |\n"
+                    "| 7 | Authors | Same author name appears on multiple different domains |"
+                )
 
         # ── GPT-4 Analysis ───────────────────────────
         with r_tab3:
@@ -409,18 +506,23 @@ with tab_analyze:
 
                         domain_summary = "\n".join([
                             f"- {d}: {v.get('verdict')} "
-                            f"(confidence={v.get('confidence',0):.0%}, "
-                            f"signals={v.get('signals_triggered',0)}/3)"
+                            f"(signals={v.get('signals_triggered',0)}/7 — "
+                            f"similarity={v.get('signal_1_similarity',0)}, "
+                            f"hosting={v.get('signal_4_hosting',0)}, "
+                            f"wayback={v.get('signal_6_wayback',0)}, "
+                            f"authors={v.get('signal_7_authors',0)})"
                             for d, v in domain_verdicts.items()
                         ])
-                        prompt = f"""Analyze this domain cluster assessment:
+                        prompt = f"""You are helping a journalist investigate a potential coordinated fake news network.
 
-Domains:
+Domain analysis results (7 signals checked per domain):
 {domain_summary}
 
-Overall: {verdict} at {confidence:.0%} confidence.
+Overall verdict: {verdict}
 
-Provide: (1) what signal patterns suggest, (2) whether this looks organic or coordinated and why, (3) key indicators, (4) what to investigate next. Be concise."""
+Signals explained: 1=content similarity, 2=publishing cadence, 3=WHOIS registration, 4=shared hosting IP, 5=insular link network, 6=Wayback Machine history, 7=shared author names.
+
+Provide: (1) what the triggered signals suggest about coordination, (2) whether this looks like a real news operation or a fake network, (3) the most suspicious specific findings, (4) what a journalist should investigate next (e.g. check ownership records, interview sources). Be direct and concise."""
 
                         resp = client.chat.completions.create(
                             model="gpt-4o-mini",
@@ -439,50 +541,156 @@ Provide: (1) what signal patterns suggest, (2) whether this looks organic or coo
         # ── Domain Details ───────────────────────────
         with r_tab4:
             st.subheader("Per-Domain Breakdown")
+            st.caption("Each domain is checked against 7 independent signals. 3 or more = High Risk.")
             if domain_verdicts:
                 for d, dv in domain_verdicts.items():
-                    v = dv.get("verdict", "ORGANIC")
+                    s1 = int(dv.get("signal_1_similarity", 0))
+                    s2 = int(dv.get("signal_2_cadence", 0))
+                    s3 = int(dv.get("signal_3_whois", 0))
+                    s4 = int(dv.get("signal_4_hosting", 0))
+                    s5 = int(dv.get("signal_5_link_network", 0))
+                    s6 = int(dv.get("signal_6_wayback", 0))
+                    s7 = int(dv.get("signal_7_authors", 0))
+                    signals_fired = s1 + s2 + s3 + s4 + s5 + s6 + s7
+
+                    if signals_fired >= 3:
+                        v = "SYNTHETIC"
+                    elif signals_fired >= 1:
+                        v = "REVIEW"
+                    else:
+                        v = "ORGANIC"
+
+                    max_sim = float(dv.get("max_similarity", 0) or 0)
+                    _burst  = float(dv.get("burst_score", 0) or 0)
+                    if signals_fired >= 3:
+                        recomputed_conf = round(max(0.65, min(0.97, 0.65
+                            + min((signals_fired - 3) / 4.0, 1.0) * 0.20
+                            + min(max_sim * 0.20, 0.10)
+                            + min(_burst * 0.15, 0.06))), 2)
+                    elif signals_fired >= 1:
+                        recomputed_conf = round(max(0.02, min(0.64, 0.40
+                            + (signals_fired - 1) * 0.10
+                            + min(max_sim * 0.20, 0.10)
+                            + min(_burst * 0.15, 0.06))), 2)
+                    else:
+                        recomputed_conf = round(max(0.70, min(1.0 - min(max_sim * 0.20, 0.20), 0.97)), 2)
+
                     icon = "🔴" if v == "SYNTHETIC" else "🟡" if v == "REVIEW" else "🟢"
-                    with st.expander(f"{icon} {d} — {v} ({dv.get('confidence',0):.0%})"):
+
+                    with st.expander(
+                        f"{icon} {d} — {v} — {signals_fired}/7 signals triggered",
+                        expanded=(v != "ORGANIC"),
+                    ):
+                        # Row 1: original 3 signals
                         c1, c2, c3 = st.columns(3)
-                        with c1: st.metric("Similarity", "🚨 Triggered" if dv.get("signal_1_similarity") else "✅ Clear")
-                        with c2: st.metric("Cadence", "🚨 Triggered" if dv.get("signal_2_cadence") else "✅ Clear")
-                        with c3: st.metric("WHOIS", "🚨 Triggered" if dv.get("signal_3_whois") else "✅ Clear")
-                        st.info(f"💬 {dv.get('explanation', 'No explanation available')}")
+                        with c1:
+                            sim_val = float(dv.get("max_similarity") or 0)
+                            st.metric("1 · Content Similarity",
+                                      "🚨 Triggered" if s1 else "✅ Clear",
+                                      delta=f"score {sim_val:.3f} (threshold 0.45)" if sim_val else "no match found",
+                                      delta_color="inverse" if s1 else "off",
+                                      help="Checks if this site's text is unusually similar to other known domains.")
+                        with c2:
+                            burst = float(dv.get("burst_score") or 0)
+                            st.metric("2 · Publishing Cadence",
+                                      "🚨 Triggered" if s2 else "✅ Clear",
+                                      delta=f"anomaly score {burst:.3f}" if burst else None,
+                                      delta_color="inverse" if s2 else "off",
+                                      help="Detects unusual publishing time patterns compared to other domains.")
+                        with c3:
+                            age = int(dv.get("domain_age_days") or -1)
+                            age_str = f"{age} days old" if age > 0 else "age unknown"
+                            st.metric("3 · WHOIS Registration",
+                                      "🚨 Triggered" if s3 else "✅ Clear",
+                                      delta=age_str,
+                                      delta_color="inverse" if s3 else "off",
+                                      help="Flags very new domains or suspicious registration patterns.")
+
+                        # Row 2: new 4 signals
+                        c4, c5, c6, c7 = st.columns(4)
+                        with c4:
+                            org = dv.get("hosting_org", "") or ""
+                            ip  = dv.get("ip_address", "") or ""
+                            st.metric("4 · Shared Hosting",
+                                      "🚨 Triggered" if s4 else "✅ Clear",
+                                      delta=org[:30] if org else (ip or "no data"),
+                                      delta_color="inverse" if s4 else "off",
+                                      help="Flags domains that share an IP address or hosting provider.")
+                        with c5:
+                            insular = float(dv.get("insular_score") or 0)
+                            st.metric("5 · Link Network",
+                                      "🚨 Triggered" if s5 else "✅ Clear",
+                                      delta=f"{insular:.0%} links within cluster" if insular else None,
+                                      delta_color="inverse" if s5 else "off",
+                                      help="Flags domains that mutually link to each other (insular cluster).")
+                        with c6:
+                            snaps = int(dv.get("wayback_snapshot_count") or 0)
+                            wb_reason = dv.get("wayback_flag_reason", "") or ""
+                            wb_label = "new site" if wb_reason == "new_site" else ("archive spike" if wb_reason else f"{snaps} snapshots")
+                            st.metric("6 · Archive History",
+                                      "🚨 Triggered" if s6 else "✅ Clear",
+                                      delta=wb_label,
+                                      delta_color="inverse" if s6 else "off",
+                                      help="Checks Wayback Machine — very new sites or sudden archive spikes are suspicious.")
+                        with c7:
+                            try:
+                                import json as _json
+                                shared = _json.loads(dv.get("shared_authors", "[]") or "[]")
+                            except Exception:
+                                shared = []
+                            auth_label = shared[0] if shared else ("shared author found" if s7 else "no overlap")
+                            st.metric("7 · Author Overlap",
+                                      "🚨 Triggered" if s7 else "✅ Clear",
+                                      delta=str(auth_label)[:40],
+                                      delta_color="inverse" if s7 else "off",
+                                      help="Flags when the same author name appears on multiple different domains.")
+
+                        st.divider()
+                        if signals_fired == 0:
+                            st.success(f"**{d}** passed all 7 checks. No suspicious patterns detected.")
+                        elif v == "REVIEW":
+                            st.info(f"💬 {dv.get('explanation', 'No explanation available')}")
+                            st.caption(
+                                f"**Why not High Risk?** The 3-of-7 rule requires at least 3 independent signals "
+                                f"to confirm a coordinated fake network. {d} triggered {signals_fired}/7 — "
+                                f"enough to flag for investigation, but not enough to confirm synthetic coordination on its own. "
+                                f"A journalist should verify the flagged signal(s) before drawing conclusions."
+                            )
+                        else:
+                            st.info(f"💬 {dv.get('explanation', 'No explanation available')}")
 
         # ── Evidence ─────────────────────────────────
         with r_tab5:
-            st.subheader("Content Similarity Evidence")
+            st.subheader("Evidence")
             st.caption(
-                "Each card below shows a flagged domain pair whose content is "
-                "unusually similar — the raw text excerpts side-by-side so you "
-                "can judge the match yourself."
+                "Everything the detector found that a journalist can follow up on. "
+                "Three types: content matches, shared infrastructure, and shared authors."
+            )
+
+            # ── Section 1: Content Similarity ───────────
+            st.markdown("### 📄 Content Similarity")
+            st.caption(
+                "These domain pairs have suspiciously similar homepage text. "
+                "Read both excerpts and judge whether the similarity looks like "
+                "copied content or just coincidental topic overlap."
             )
             if not evidence_pairs:
-                st.info(
-                    "No similar pairs detected above the threshold — or this is "
-                    "a preliminary result. Run or refresh the full analysis to "
-                    "populate evidence."
-                )
+                st.info("No content similarity matches found above the threshold.")
             else:
                 for ep in evidence_pairs:
                     sim_pct = f"{ep['similarity']:.0%}"
                     with st.expander(
-                        f"**{ep['domain_a']}** ↔ **{ep['domain_b']}** — similarity {sim_pct}",
+                        f"**{ep['domain_a']}** ↔ **{ep['domain_b']}** — {sim_pct} similar",
                         expanded=(ep['similarity'] >= 0.7),
                     ):
-                        st.markdown(
-                            f"**Cosine similarity: `{ep['similarity']}`** "
-                            f"— threshold is {0.45}"
-                        )
+                        st.markdown(f"**Text similarity score: `{ep['similarity']}`** (threshold: 0.45 — higher = more similar)")
                         col_a, col_b = st.columns(2)
                         with col_a:
                             st.markdown(f"**{ep['domain_a']}**")
                             st.text_area(
                                 label="excerpt_a",
                                 value=ep.get("excerpt_a") or "(no content captured)",
-                                height=200,
-                                disabled=True,
+                                height=200, disabled=True,
                                 label_visibility="collapsed",
                                 key=f"ea_{ep['domain_a']}_{ep['domain_b']}",
                             )
@@ -491,11 +699,47 @@ Provide: (1) what signal patterns suggest, (2) whether this looks organic or coo
                             st.text_area(
                                 label="excerpt_b",
                                 value=ep.get("excerpt_b") or "(no content captured)",
-                                height=200,
-                                disabled=True,
+                                height=200, disabled=True,
                                 label_visibility="collapsed",
                                 key=f"eb_{ep['domain_a']}_{ep['domain_b']}",
                             )
+
+            st.divider()
+
+            # ── Section 2: Shared Hosting Infrastructure ─
+            st.markdown("### 🖥️ Shared Hosting Infrastructure")
+            st.caption(
+                "These domains share the same IP address or hosting provider. "
+                "Unrelated news outlets rarely share servers — this is a strong "
+                "indicator of common ownership. Check WHOIS and hosting records to confirm."
+            )
+            if not hosting_evidence:
+                st.info("No shared hosting detected.")
+            else:
+                for he in hosting_evidence:
+                    edge_label = "same IP address" if he["edge_type"] == "SAME_IP" else "same hosting provider (ASN)"
+                    st.warning(
+                        f"**{he['domain_a']}** and **{he['domain_b']}** share the **{edge_label}**. "
+                        f"→ Check: who registered both domains? Are they at the same address?"
+                    )
+
+            st.divider()
+
+            # ── Section 3: Shared Author Names ──────────
+            st.markdown("### ✍️ Shared Author Bylines")
+            st.caption(
+                "The same author name appeared on articles from multiple different domains. "
+                "This is one of the strongest signals of a coordinated network — "
+                "real independent outlets rarely share staff."
+            )
+            if not author_evidence:
+                st.info("No shared authors detected. (Requires article pages to have been crawled successfully.)")
+            else:
+                for ae in author_evidence:
+                    st.warning(
+                        f"Author **\"{ae['author']}\"** was found on both **{ae['domain_a']}** and **{ae['domain_b']}**. "
+                        f"→ Check: is this person real? Do they have a social media presence? Are they listed on both sites?"
+                    )
 
         st.divider()
 

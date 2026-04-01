@@ -23,6 +23,28 @@ HEADERS      = {
     )
 }
 
+# Article crawling config
+MAX_ARTICLES_PER_DOMAIN = 3
+ARTICLE_URL_PATTERNS    = (
+    "/2024/", "/2025/", "/2026/",
+    "/news/", "/article/", "/articles/",
+    "/story/", "/stories/", "/post/", "/posts/",
+    "/blog/", "/p/", "/politics/", "/world/",
+    "/opinion/", "/tech/", "/science/",
+)
+
+import re
+_BYLINE_RE = [
+    re.compile(r"[Bb]y\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})"),
+    re.compile(r"[Aa]uthor[:\s]+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})"),
+    re.compile(r'[Ww]ritten\s+[Bb]y\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})'),
+]
+_NOISE_AUTHORS = {
+    "reuters", "ap", "associated press", "staff writer", "news desk",
+    "wire service", "staff reporter", "the editors", "editorial board",
+    "admin", "editor", "contributor", "guest writer", "press release",
+}
+
 # Track failed domains globally so we can report them
 _failed_domains = []
 
@@ -59,6 +81,67 @@ def get_parent_domain(domain: str) -> str:
     return domain
 
 
+def extract_article_urls(soup, base_url: str) -> list:
+    """Return up to MAX_ARTICLES_PER_DOMAIN article-shaped URLs from a parsed page."""
+    from urllib.parse import urljoin
+    found = []
+    for a in soup.find_all("a", href=True):
+        href = a["href"]
+        # Make absolute
+        if href.startswith("/"):
+            href = urljoin(base_url, href)
+        if not href.startswith("http"):
+            continue
+        if any(pat in href for pat in ARTICLE_URL_PATTERNS):
+            found.append(href)
+        if len(found) >= MAX_ARTICLES_PER_DOMAIN:
+            break
+    return found
+
+
+def extract_authors(soup) -> list:
+    """Extract author names from a parsed article page."""
+    text = soup.get_text(separator=" ", strip=True)
+    authors = []
+    for pattern in _BYLINE_RE:
+        for m in pattern.finditer(text):
+            name = m.group(1).strip()
+            if len(name) >= 5 and name.lower() not in _NOISE_AUTHORS:
+                authors.append(name)
+    return list(dict.fromkeys(authors))  # deduplicate preserving order
+
+
+def crawl_articles(soup, base_url: str) -> dict:
+    """
+    Given a homepage soup, find and crawl up to MAX_ARTICLES_PER_DOMAIN
+    article pages. Returns extracted author names.
+    """
+    article_urls = extract_article_urls(soup, base_url)
+    all_authors  = []
+    crawled_urls = []
+
+    for article_url in article_urls[:MAX_ARTICLES_PER_DOMAIN]:
+        try:
+            resp = requests.get(article_url, headers=HEADERS, timeout=TIMEOUT, allow_redirects=True)
+            if resp.status_code != 200:
+                continue
+            if "text/html" not in resp.headers.get("Content-Type", ""):
+                continue
+            article_soup = BeautifulSoup(resp.text, "html.parser")
+            authors = extract_authors(article_soup)
+            all_authors.extend(authors)
+            crawled_urls.append(article_url)
+            time.sleep(SLEEP_SEC)
+        except Exception:
+            continue
+
+    return {
+        "article_authors":        list(dict.fromkeys(all_authors)),
+        "article_count_crawled":  len(crawled_urls),
+        "article_urls":           crawled_urls,
+    }
+
+
 def fetch_page(url: str) -> dict | None:
     """
     Fetch a single URL and extract:
@@ -67,6 +150,7 @@ def fetch_page(url: str) -> dict | None:
     - outgoing links
     - timestamp
     - final URL after redirects
+    - article authors (from up to 3 article pages)
     """
     try:
         if not url.startswith("http"):
@@ -114,15 +198,21 @@ def fetch_page(url: str) -> dict | None:
                         links.append(linked)
         links = list(set(links))[:15]
 
+        # Crawl article pages for author extraction
+        article_data = crawl_articles(soup, url)
+
         return {
-            "domain":       original_domain,
-            "url":          url,
-            "final_url":    final_url,
-            "final_domain": final_domain,
-            "text":         text,
-            "links":        "|".join(links),
-            "timestamp":    datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
-            "status":       "ok",
+            "domain":               original_domain,
+            "url":                  url,
+            "final_url":            final_url,
+            "final_domain":         final_domain,
+            "text":                 text,
+            "links":                "|".join(links),
+            "timestamp":            datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
+            "status":               "ok",
+            "article_authors":      article_data["article_authors"],
+            "article_count_crawled": article_data["article_count_crawled"],
+            "article_urls":         article_data["article_urls"],
         }
 
     except requests.exceptions.Timeout:

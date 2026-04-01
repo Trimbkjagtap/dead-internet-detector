@@ -193,10 +193,23 @@ def _heuristic_preliminary_verdict(domain: str) -> Dict:
             domain: {
                 "verdict": verdict,
                 "confidence": confidence,
-                "signals_triggered": min(score, 3),
+                "signals_triggered": score,
                 "signal_1_similarity": 0,
-                "signal_2_cadence": 0,
-                "signal_3_whois": 1 if whois_flagged else 0,
+                "signal_2_cadence":    0,
+                "signal_3_whois":      1 if whois_flagged else 0,
+                "signal_4_hosting":    0,
+                "signal_5_link_network": 0,
+                "signal_6_wayback":    0,
+                "signal_7_authors":    0,
+                "max_similarity":      0.0,
+                "burst_score":         0.0,
+                "domain_age_days":     int(whois_features.get("domain_age_days", -1)),
+                "ip_address":          "",
+                "hosting_org":         "",
+                "insular_score":       0.0,
+                "wayback_snapshot_count": 0,
+                "wayback_flag_reason": "",
+                "shared_authors":      "[]",
                 "explanation": explanation,
             }
         },
@@ -246,6 +259,17 @@ def _compute_evidence_from_graph(domain: str) -> List[Dict]:
         from config.signal_config import SIM_THRESHOLD, MODEL_NAME
 
         model = SentenceTransformer(MODEL_NAME)
+        _NOISE_DOMAINS = {
+            'archive.is', 'archive.today', 'archive.org', 'web.archive.org',
+            'webcache.googleusercontent.com', 'google.com', 'bing.com',
+            'yahoo.com', 'duckduckgo.com', 'reddit.com', 'twitter.com',
+            'x.com', 'facebook.com', 'linkedin.com', 'wikipedia.org',
+            'wikimedia.org', 'pastebin.com',
+        }
+        rows = [r for r in rows if r["other_domain"] not in _NOISE_DOMAINS]
+        if not rows:
+            return []
+
         other_domains  = [r["other_domain"] for r in rows]
         other_excerpts = [r["excerpt"][:1000] for r in rows]
 
@@ -322,11 +346,24 @@ def _lookup_cached_domain(domain: str) -> Dict:
                     d.domain AS domain,
                     d.preliminary_verdict AS preliminary_verdict,
                     d.signals_triggered AS signals_triggered,
+                    d.similarity_flag AS similarity_flag,
+                    d.cadence_flagged AS cadence_flagged,
+                    d.whois_flagged AS whois_flagged,
+                    d.hosting_flagged AS hosting_flagged,
+                    d.link_network_flagged AS link_network_flagged,
+                    d.wayback_flagged AS wayback_flagged,
+                    d.author_overlap_flagged AS author_overlap_flagged,
                     d.avg_similarity AS avg_similarity,
                     d.max_similarity AS max_similarity,
                     d.anomaly_score AS anomaly_score,
                     d.burst_score AS burst_score,
                     d.domain_age_days AS domain_age_days,
+                    d.ip_address AS ip_address,
+                    d.hosting_org AS hosting_org,
+                    d.insular_score AS insular_score,
+                    d.wayback_snapshot_count AS wayback_snapshot_count,
+                    d.wayback_flag_reason AS wayback_flag_reason,
+                    d.shared_authors AS shared_authors,
                     d.registrar AS registrar,
                     d.updated_at AS updated_at,
                     collect(DISTINCT other.domain)[0..8] AS related_domains,
@@ -342,7 +379,19 @@ def _lookup_cached_domain(domain: str) -> Dict:
         return {}
 
     verdict = (node.get("preliminary_verdict") or "ORGANIC").upper()
-    confidence = min(0.97, max(0.35, (int(node.get("signals_triggered") or 0) / 3.0) + 0.35))
+    _signals = int(node.get("signals_triggered") or 0)
+    _max_sim = float(node.get("max_similarity") or 0)
+    _burst   = float(node.get("burst_score") or 0)
+    if _signals >= 3:
+        confidence = max(0.65, min(0.97, 0.65 + min((_signals - 3) / 4.0, 1.0) * 0.20
+                         + min(_max_sim * 0.20, 0.10) + min(_burst * 0.15, 0.06)))
+    elif _signals >= 1:
+        confidence = max(0.02, min(0.64, 0.40 + (_signals - 1) * 0.10
+                         + min(_max_sim * 0.20, 0.10) + min(_burst * 0.15, 0.06)))
+    else:
+        sim_boost  = min(_max_sim * 0.20, 0.20)
+        confidence = max(0.70, min(0.97, 1.0 - sim_boost))
+    confidence = round(confidence, 2)
     related_count = int(node.get("related_count") or 0)
     reasons = []
 
@@ -426,9 +475,22 @@ def _lookup_cached_domain(domain: str) -> Dict:
                 "verdict": verdict,
                 "confidence": round(confidence, 2),
                 "signals_triggered": int(node.get("signals_triggered") or 0),
-                "signal_1_similarity": 1 if float(node.get("max_similarity") or 0) >= 0.82 else 0,
-                "signal_2_cadence": 1 if float(node.get("burst_score") or 0) >= 0.6 else 0,
-                "signal_3_whois": 1 if int(node.get("domain_age_days") or -1) in range(0, 91) else 0,
+                "signal_1_similarity": int(node.get("similarity_flag") or 0),
+                "signal_2_cadence":    int(node.get("cadence_flagged") or 0),
+                "signal_3_whois":      int(node.get("whois_flagged") or 0),
+                "signal_4_hosting":    int(node.get("hosting_flagged") or 0),
+                "signal_5_link_network": int(node.get("link_network_flagged") or 0),
+                "signal_6_wayback":    int(node.get("wayback_flagged") or 0),
+                "signal_7_authors":    int(node.get("author_overlap_flagged") or 0),
+                "max_similarity":      float(node.get("max_similarity") or 0),
+                "burst_score":         float(node.get("burst_score") or 0),
+                "domain_age_days":     int(node.get("domain_age_days") or -1),
+                "ip_address":          str(node.get("ip_address") or ""),
+                "hosting_org":         str(node.get("hosting_org") or ""),
+                "insular_score":       float(node.get("insular_score") or 0),
+                "wayback_snapshot_count": int(node.get("wayback_snapshot_count") or 0),
+                "wayback_flag_reason": str(node.get("wayback_flag_reason") or ""),
+                "shared_authors":      str(node.get("shared_authors") or "[]"),
                 "explanation": summary,
             }
         },
@@ -665,6 +727,78 @@ async def analyze_domains(request: AnalyzeRequest):
             status_code=500,
             detail=f"Analysis failed: {str(e)}"
         )
+
+
+@app.get("/graph/neighborhood/{domain}", tags=["Graph"])
+async def get_graph_neighborhood(domain: str):
+    """
+    Returns the 1-hop neighborhood of a domain: the domain itself +
+    every domain it shares a SIMILAR_TO edge with, plus those edges.
+    Used for the focused per-domain graph view.
+    """
+    try:
+        driver = get_neo4j_driver()
+        with driver.session() as session:
+            result = session.run("""
+                MATCH (seed:Domain {domain: $domain})
+                OPTIONAL MATCH (seed)-[r:SIMILAR_TO]-(neighbor:Domain)
+                RETURN
+                    seed.domain          AS seed_domain,
+                    seed.preliminary_verdict AS seed_verdict,
+                    seed.signals_triggered   AS seed_signals,
+                    neighbor.domain          AS nb_domain,
+                    neighbor.preliminary_verdict AS nb_verdict,
+                    neighbor.signals_triggered   AS nb_signals,
+                    r.similarity             AS similarity
+                LIMIT 50
+            """, domain=domain)
+
+            nodes_map = {}
+            edges = []
+            found_seed = False
+
+            for record in result:
+                sd = record["seed_domain"]
+                if sd:
+                    found_seed = True
+                    nodes_map[sd] = {
+                        "id": sd, "domain": sd,
+                        "verdict": record["seed_verdict"] or "ORGANIC",
+                        "signals": record["seed_signals"] or 0,
+                        "is_seed": True,
+                    }
+                nb = record["nb_domain"]
+                if nb:
+                    if nb not in nodes_map:
+                        nodes_map[nb] = {
+                            "id": nb, "domain": nb,
+                            "verdict": record["nb_verdict"] or "ORGANIC",
+                            "signals": record["nb_signals"] or 0,
+                            "is_seed": False,
+                        }
+                    sim = record["similarity"]
+                    edges.append({
+                        "source": sd,
+                        "target": nb,
+                        "similarity": round(float(sim), 4) if sim is not None else 0.0,
+                    })
+
+        driver.close()
+
+        if not found_seed:
+            return {"nodes": [], "edges": [], "node_count": 0, "edge_count": 0, "domain": domain}
+
+        nodes = list(nodes_map.values())
+        return {
+            "nodes": nodes,
+            "edges": edges,
+            "node_count": len(nodes),
+            "edge_count": len(edges),
+            "domain": domain,
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Neighborhood query failed: {str(e)}")
 
 
 @app.get("/graph", tags=["Graph"])

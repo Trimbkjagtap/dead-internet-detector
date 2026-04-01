@@ -13,8 +13,15 @@ from config.signal_config import (
     MODEL_NAME,
     SIM_THRESHOLD,
     bounded_contamination,
+    IPINFO_TOKEN,
+    INSULAR_SCORE_THRESHOLD,
+    MIN_LINKS_FOR_INSULAR,
+    MIN_DOMAINS_FOR_INSULAR,
+    WAYBACK_MIN_SNAPSHOTS,
+    WAYBACK_SPIKE_RATIO,
 )
 from services.whois_service import WhoisService
+from services.enrichment_service import resolve_ip_and_asn, get_wayback_data
 
 # ── Config ───────────────────────────────────────────
 CADENCE_THRESHOLD = -0.1
@@ -98,8 +105,20 @@ def _compute_signal1_against_corpus(domains_data: list) -> dict:
     seed_text   = seed.get('text', '')[:1000]
     excerpts    = {seed_domain: seed.get('text', '')[:400].strip()}
 
-    # Exclude the seed domain itself from corpus
-    corpus = [d for d in corpus if d['domain'] != seed_domain]
+    # Domains that contain content from everywhere — comparing against them is meaningless
+    _NOISE_DOMAINS = {
+        'archive.is', 'archive.today', 'archive.org', 'web.archive.org',
+        'webcache.googleusercontent.com', 'cached.google.com',
+        'translate.google.com', 'amp.google.com',
+        'google.com', 'bing.com', 'yahoo.com', 'duckduckgo.com',
+        'reddit.com', 'twitter.com', 'x.com', 'facebook.com',
+        'linkedin.com', 'pinterest.com', 'tumblr.com',
+        'wikipedia.org', 'wikimedia.org',
+        'pastebin.com', 'hastebin.com',
+    }
+
+    # Exclude the seed domain itself and noise domains from corpus
+    corpus = [d for d in corpus if d['domain'] != seed_domain and d['domain'] not in _NOISE_DOMAINS]
     if not corpus:
         return {'domain_scores': {}, 'edges': {}, 'excerpts': excerpts}
 
@@ -291,6 +310,231 @@ def compute_signal3_whois(domains_data: list) -> dict:
     return result
 
 
+_CDN_ASNS = {"AS13335", "AS54113", "AS16509", "AS15169", "AS20940", "AS209242", "AS22120", "AS14618", "AS8075"}
+
+_NOISE_AUTHORS = {
+    "reuters", "ap", "associated press", "staff writer", "news desk",
+    "wire service", "staff reporter", "the editors", "editorial board",
+    "admin", "editor", "contributor", "guest writer", "press release",
+}
+
+
+def compute_signal4_hosting(domains_data: list) -> dict:
+    """Signal 4: IP address and ASN/hosting overlap between domains."""
+    print("  🌐 Computing Signal 4 (hosting overlap)...")
+
+    live_domains = [d for d in domains_data if d.get('status') == 'ok']
+    if len(live_domains) < 2:
+        result = {}
+        for d in domains_data:
+            result[d['domain']] = {
+                'ip_address': '', 'asn': '', 'hosting_org': '',
+                'hosting_flagged': 0, 'shared_ip_domains': [],
+                'shared_asn_domains': [], 'is_cdn': False,
+            }
+        return {'domain_scores': result, 'host_edges': {}}
+
+    ip_info    = {}
+    ip_to_doms = {}
+    asn_to_doms = {}
+
+    for d in live_domains:
+        domain = d['domain']
+        info   = resolve_ip_and_asn(domain, IPINFO_TOKEN)
+        ip_info[domain] = info
+        ip  = info.get('ip_address', '')
+        asn = info.get('asn', '')
+        if ip:
+            ip_to_doms.setdefault(ip, []).append(domain)
+        if asn and asn not in _CDN_ASNS:
+            asn_to_doms.setdefault(asn, []).append(domain)
+
+    result     = {}
+    host_edges = {}
+
+    for d in domains_data:
+        domain = d['domain']
+        if domain not in ip_info:
+            result[domain] = {
+                'ip_address': '', 'asn': '', 'hosting_org': '',
+                'hosting_flagged': 0, 'shared_ip_domains': [],
+                'shared_asn_domains': [], 'is_cdn': False,
+            }
+            continue
+
+        info   = ip_info[domain]
+        ip     = info.get('ip_address', '')
+        asn    = info.get('asn', '')
+        is_cdn = info.get('is_cdn', False)
+
+        shared_ip  = [x for x in ip_to_doms.get(ip, [])  if x != domain]
+        shared_asn = [x for x in asn_to_doms.get(asn, []) if x != domain]
+
+        flagged = 1 if (shared_ip or shared_asn) and not is_cdn else 0
+
+        for other in shared_ip:
+            key = "|||".join(sorted([domain, other]))
+            host_edges[key] = "SAME_IP"
+        for other in shared_asn:
+            key = "|||".join(sorted([domain, other]))
+            if key not in host_edges:
+                host_edges[key] = "SAME_ASN"
+
+        result[domain] = {
+            'ip_address':       ip,
+            'asn':              asn,
+            'hosting_org':      info.get('hosting_org', ''),
+            'hosting_flagged':  flagged,
+            'shared_ip_domains':  shared_ip,
+            'shared_asn_domains': shared_asn,
+            'is_cdn':           is_cdn,
+        }
+
+    flagged_count = sum(1 for v in result.values() if v['hosting_flagged'])
+    print(f"  ✅ Signal 4: {flagged_count} domains share hosting, {len(host_edges)} host edges")
+    return {'domain_scores': result, 'host_edges': host_edges}
+
+
+def compute_signal5_link_network(domains_data: list) -> dict:
+    """Signal 5: Mutual linking and insular network detection."""
+    print("  🔗 Computing Signal 5 (link network)...")
+
+    analyzed_set = {d['domain'] for d in domains_data}
+
+    outlinks = {}
+    for d in domains_data:
+        raw   = d.get('links', '') or ''
+        links = {l.strip() for l in raw.split('|') if l.strip()}
+        outlinks[d['domain']] = links
+
+    result       = {}
+    mutual_edges = {}
+
+    for d in domains_data:
+        domain = d['domain']
+        my_links = outlinks.get(domain, set())
+
+        mutual = [
+            other for other in analyzed_set
+            if other != domain and domain in outlinks.get(other, set()) and other in my_links
+        ]
+
+        overlap = my_links & analyzed_set - {domain}
+        insular_score = len(overlap) / max(len(my_links), 1) if len(my_links) >= MIN_LINKS_FOR_INSULAR else 0.0
+
+        insular_flag = (
+            insular_score >= INSULAR_SCORE_THRESHOLD
+            and len(my_links) >= MIN_LINKS_FOR_INSULAR
+            and len(analyzed_set) >= MIN_DOMAINS_FOR_INSULAR
+        )
+
+        flagged = 1 if (mutual or insular_flag) else 0
+
+        for other in mutual:
+            key = "|||".join(sorted([domain, other]))
+            mutual_edges[key] = True
+
+        result[domain] = {
+            'mutual_link_count':   len(mutual),
+            'insular_score':       round(insular_score, 4),
+            'link_network_flagged': flagged,
+        }
+
+    flagged_count = sum(1 for v in result.values() if v['link_network_flagged'])
+    print(f"  ✅ Signal 5: {flagged_count} domains flagged, {len(mutual_edges)} mutual link pairs")
+    return {'domain_scores': result, 'mutual_link_edges': mutual_edges}
+
+
+def compute_signal6_wayback(domains_data: list) -> dict:
+    """Signal 6: Wayback Machine history — new or spiking sites."""
+    print("  📚 Computing Signal 6 (Wayback Machine history)...")
+
+    result = {}
+    for d in domains_data:
+        domain = d['domain']
+        if d.get('status') == 'fallback':
+            result[domain] = {
+                'wayback_snapshot_count': 0, 'wayback_first_seen': '',
+                'wayback_recent_count': 0,  'wayback_age_days': -1,
+                'wayback_flagged': 0, 'wayback_flag_reason': '',
+            }
+            continue
+
+        wb = get_wayback_data(domain)
+        count  = wb.get('wayback_snapshot_count', 0)
+        recent = wb.get('wayback_recent_count', 0)
+
+        new_site_flag = (not wb.get('wayback_error') and count < WAYBACK_MIN_SNAPSHOTS)
+        spike_flag    = (
+            count >= WAYBACK_MIN_SNAPSHOTS and recent >= 2
+            and (recent / max(count, 1)) >= WAYBACK_SPIKE_RATIO
+        )
+
+        if new_site_flag:
+            reason = 'new_site'
+        elif spike_flag:
+            reason = 'recent_spike'
+        else:
+            reason = ''
+
+        result[domain] = {
+            'wayback_snapshot_count': count,
+            'wayback_first_seen':     wb.get('wayback_first_seen', ''),
+            'wayback_recent_count':   recent,
+            'wayback_age_days':       wb.get('wayback_age_days', -1),
+            'wayback_flagged':        1 if (new_site_flag or spike_flag) else 0,
+            'wayback_flag_reason':    reason,
+        }
+
+    flagged_count = sum(1 for v in result.values() if v['wayback_flagged'])
+    print(f"  ✅ Signal 6: {flagged_count} domains flagged by Wayback history")
+    return result
+
+
+def compute_signal7_authors(domains_data: list) -> dict:
+    """Signal 7: Shared author names across domains."""
+    print("  ✍️  Computing Signal 7 (shared authors)...")
+
+    author_to_domains = {}
+    for d in domains_data:
+        domain  = d['domain']
+        authors = d.get('article_authors', []) or []
+        for name in authors:
+            norm = name.lower().strip()
+            if len(norm) < 5 or norm in _NOISE_AUTHORS:
+                continue
+            author_to_domains.setdefault(norm, set()).add(domain)
+
+    result       = {}
+    author_edges = {}
+
+    for d in domains_data:
+        domain  = d['domain']
+        authors = d.get('article_authors', []) or []
+
+        shared = []
+        for name in authors:
+            norm = name.lower().strip()
+            if norm in author_to_domains and len(author_to_domains[norm]) > 1:
+                shared.append(name)
+                # Build edges between all domains sharing this author
+                doms = list(author_to_domains[norm])
+                for i in range(len(doms)):
+                    for j in range(i + 1, len(doms)):
+                        key = "|||".join(sorted([doms[i], doms[j]]))
+                        author_edges[key] = name
+
+        result[domain] = {
+            'article_authors':        authors,
+            'shared_authors':         list(dict.fromkeys(shared)),
+            'author_overlap_flagged': 1 if shared else 0,
+        }
+
+    flagged_count = sum(1 for v in result.values() if v['author_overlap_flagged'])
+    print(f"  ✅ Signal 7: {flagged_count} domains share author names, {len(author_edges)} author edges")
+    return {'domain_scores': result, 'author_edges': author_edges}
+
+
 def analyze_domains(domains_data: list) -> dict:
     """
     Main analysis function.
@@ -306,6 +550,10 @@ def analyze_domains(domains_data: list) -> dict:
     sig1 = compute_signal1_similarity(domains_data)
     sig2 = compute_signal2_cadence(domains_data)
     sig3 = compute_signal3_whois(domains_data)
+    sig4 = compute_signal4_hosting(domains_data)
+    sig5 = compute_signal5_link_network(domains_data)
+    sig6 = compute_signal6_wayback(domains_data)
+    sig7 = compute_signal7_authors(domains_data)
 
     features = {}
     for d in domains_data:
@@ -314,24 +562,63 @@ def analyze_domains(domains_data: list) -> dict:
         s1 = sig1.get('domain_scores', {}).get(domain, {})
         s2 = sig2.get(domain, {})
         s3 = sig3.get(domain, {})
+        s4 = sig4.get('domain_scores', {}).get(domain, {})
+        s5 = sig5.get('domain_scores', {}).get(domain, {})
+        s6 = sig6.get(domain, {})
+        s7 = sig7.get('domain_scores', {}).get(domain, {})
 
-        similarity_flag  = s1.get('similarity_flag', 0)
-        cadence_flagged  = s2.get('cadence_flagged', 0)
-        whois_flagged    = s3.get('whois_flagged', 0)
-        signals_triggered = similarity_flag + cadence_flagged + whois_flagged
+        similarity_flag        = s1.get('similarity_flag', 0)
+        cadence_flagged        = s2.get('cadence_flagged', 0)
+        whois_flagged          = s3.get('whois_flagged', 0)
+        hosting_flagged        = s4.get('hosting_flagged', 0)
+        link_network_flagged   = s5.get('link_network_flagged', 0)
+        wayback_flagged        = s6.get('wayback_flagged', 0)
+        author_overlap_flagged = s7.get('author_overlap_flagged', 0)
+
+        signals_triggered = (
+            similarity_flag + cadence_flagged + whois_flagged +
+            hosting_flagged + link_network_flagged +
+            wayback_flagged + author_overlap_flagged
+        )
 
         features[domain] = {
+            # Signal 1
             'avg_similarity':   s1.get('avg_similarity', 0.0),
             'max_similarity':   s1.get('max_similarity', 0.0),
             'similarity_flag':  similarity_flag,
+            # Signal 2
             'anomaly_score':    s2.get('anomaly_score', 0.0),
             'cadence_flagged':  cadence_flagged,
             'burst_score':      s2.get('burst_score', 0.0),
+            'hour_variance':    0.0,
+            # Signal 3
             'domain_age_days':  s3.get('domain_age_days', -1),
             'registrar':        s3.get('registrar', 'unknown'),
             'whois_flagged':    whois_flagged,
+            # Signal 4
+            'ip_address':          s4.get('ip_address', ''),
+            'asn':                 s4.get('asn', ''),
+            'hosting_org':         s4.get('hosting_org', ''),
+            'hosting_flagged':     hosting_flagged,
+            'shared_ip_domains':   json.dumps(s4.get('shared_ip_domains', [])),
+            'shared_asn_domains':  json.dumps(s4.get('shared_asn_domains', [])),
+            # Signal 5
+            'mutual_link_count':    s5.get('mutual_link_count', 0),
+            'insular_score':        s5.get('insular_score', 0.0),
+            'link_network_flagged': link_network_flagged,
+            # Signal 6
+            'wayback_snapshot_count': s6.get('wayback_snapshot_count', 0),
+            'wayback_first_seen':     s6.get('wayback_first_seen', ''),
+            'wayback_recent_count':   s6.get('wayback_recent_count', 0),
+            'wayback_age_days':       s6.get('wayback_age_days', -1),
+            'wayback_flagged':        wayback_flagged,
+            'wayback_flag_reason':    s6.get('wayback_flag_reason', ''),
+            # Signal 7
+            'article_authors':        json.dumps(s7.get('article_authors', [])),
+            'shared_authors':         json.dumps(s7.get('shared_authors', [])),
+            'author_overlap_flagged': author_overlap_flagged,
+            # Summary
             'signals_triggered': signals_triggered,
-            'hour_variance':    0.0,
         }
 
     print()
@@ -339,9 +626,11 @@ def analyze_domains(domains_data: list) -> dict:
     print(f"   Features computed for {len(features)} domains")
 
     return {
-        'features':   features,
-        'sim_edges':  sig1.get('edges', {}),
-        'excerpts':   sig1.get('excerpts', {}),
+        'features':      features,
+        'sim_edges':     sig1.get('edges', {}),
+        'excerpts':      sig1.get('excerpts', {}),
+        'host_edges':    sig4.get('host_edges', {}),
+        'author_edges':  sig7.get('author_edges', {}),
     }
 
 

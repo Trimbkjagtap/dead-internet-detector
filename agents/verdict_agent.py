@@ -105,72 +105,108 @@ def build_graph_tensors(features: dict, sim_edges: dict):
 
 def compute_confidence(feats: dict, syn_prob: float) -> float:
     """
-    Compute a meaningful confidence score from actual signals.
-    
-    Instead of relying solely on the GNN (which overfits on small data),
-    we combine signal strength with similarity scores for a more 
-    honest confidence estimate.
-    
-    Returns: float between 0.0 and 0.99
+    Compute suspicion confidence (0–1, higher = more suspicious).
+    For ORGANIC verdicts the caller inverts this to mean "confidence it's clean".
+
+    Formula is verdict-tier anchored so that:
+      - REVIEW  (1–2 signals): base 0.40, max ~0.64
+      - SYNTHETIC (3–7 signals): base 0.65, max 0.97
+
+    Within each tier, confidence rises with:
+      - Extra signals beyond the tier minimum     (up to +0.20)
+      - High content similarity score             (up to +0.10)
+      - Anomalous cadence burst score             (up to +0.06)
+      - GNN synthetic probability (5% weight)     (up to +0.05)
     """
     signals = int(feats.get('signals_triggered', 0))
     max_sim = float(feats.get('max_similarity', 0))
     burst   = float(feats.get('burst_score', 0))
-    
-    # Base confidence from number of signals triggered
-    # 0 signals = 0.0, 1 signal = 0.33, 2 signals = 0.67, 3 signals = 1.0
-    signal_confidence = signals / 3.0
-    
-    # Similarity contribution (0 to 0.15)
-    # Higher similarity = more suspicious
-    sim_boost = min(max_sim * 0.3, 0.15)
-    
-    # Cadence anomaly contribution (0 to 0.1)
-    cadence_boost = min(burst * 0.2, 0.1)
-    
-    # GNN contribution (small weight — model has limited generalization)
-    gnn_boost = syn_prob * 0.05
-    
-    # Combined confidence
-    confidence = signal_confidence + sim_boost + cadence_boost + gnn_boost
-    
-    # Clamp between 0.02 and 0.97 (never show 0% or 100%)
-    confidence = max(0.02, min(confidence, 0.97))
-    
+
+    if signals >= 3:
+        # SYNTHETIC tier: base 0.65, boosted by signals 4–7
+        base          = 0.65
+        signal_boost  = min((signals - 3) / 4.0, 1.0) * 0.20   # up to +0.20 for 4→7 signals
+    elif signals >= 1:
+        # REVIEW tier: base 0.40, 2nd signal adds +0.10, hard-capped at 0.64
+        base          = 0.40
+        signal_boost  = (signals - 1) * 0.10                    # +0.10 for signal 2
+    else:
+        # ORGANIC — caller handles this via separate inversion formula
+        base          = 0.0
+        signal_boost  = 0.0
+
+    sim_boost     = min(max_sim * 0.20, 0.10)     # up to +0.10
+    cadence_boost = min(burst * 0.15, 0.06)        # up to +0.06
+    gnn_boost     = syn_prob * 0.05                # up to +0.05
+
+    confidence = base + signal_boost + sim_boost + cadence_boost + gnn_boost
+    # Hard cap per tier so REVIEW never overlaps the SYNTHETIC floor
+    if signals >= 3:
+        confidence = max(0.65, min(confidence, 0.97))
+    elif signals >= 1:
+        confidence = max(0.02, min(confidence, 0.64))
+    else:
+        confidence = max(0.02, min(confidence, 0.97))
     return round(confidence, 2)
 
 
-def generate_explanation(domain: str, feats: dict, confidence: float) -> str:
+def generate_explanation(domain: str, feats: dict) -> str:
     """Generate plain-English explanation for the verdict."""
     reasons = []
 
     if feats.get('similarity_flag', 0):
         reasons.append(
-            f"content similarity score {feats.get('max_similarity',0):.2f} "
-            f"exceeds threshold (Signal 1 triggered)"
+            f"content is unusually similar to other domains "
+            f"(similarity {feats.get('max_similarity',0):.2f})"
         )
     if feats.get('cadence_flagged', 0):
         reasons.append(
-            f"publishing cadence anomaly detected — "
-            f"burst score {feats.get('burst_score',0):.2f} (Signal 2 triggered)"
+            f"anomalous publishing time pattern detected"
         )
     if feats.get('whois_flagged', 0):
-        reasons.append("suspicious domain registration pattern (Signal 3 triggered)")
-
-    if not reasons:
-        return (f"{domain} shows no suspicious patterns across all 3 signals. "
-                f"Content similarity, publishing cadence, and registration data "
-                f"all appear organic. Confidence: {confidence:.0%}.")
+        reasons.append("suspicious domain registration pattern")
+    if feats.get('hosting_flagged', 0):
+        reasons.append(
+            f"shares hosting infrastructure with other analyzed domains"
+        )
+    if feats.get('link_network_flagged', 0):
+        mutual = int(feats.get('mutual_link_count', 0))
+        insular = float(feats.get('insular_score', 0))
+        if mutual > 0:
+            reasons.append(f"mutually links with {mutual} other domain(s) in the cluster")
+        else:
+            reasons.append(f"{insular:.0%} of outgoing links stay within the analyzed cluster")
+    if feats.get('wayback_flagged', 0):
+        reason = feats.get('wayback_flag_reason', '')
+        count  = int(feats.get('wayback_snapshot_count', 0))
+        if reason == 'new_site':
+            reasons.append(f"only {count} Wayback Machine snapshot(s) — site appears very new")
+        else:
+            recent = int(feats.get('wayback_recent_count', 0))
+            reasons.append(f"archive spike: {recent} of {count} snapshots are from the last 30 days")
+    if feats.get('author_overlap_flagged', 0):
+        try:
+            import json
+            shared = json.loads(feats.get('shared_authors', '[]'))
+        except Exception:
+            shared = []
+        names = ", ".join(f'"{a}"' for a in shared[:3])
+        reasons.append(f"author name(s) {names} appear across multiple domains")
 
     signals = feats.get('signals_triggered', 0)
+
+    if not reasons:
+        return (
+            f"{domain} passed all 7 checks — no suspicious patterns detected. "
+            f"Content, hosting, link structure, archive history, and registration data all appear organic."
+        )
+
     return (
-        f"{domain} triggered {signals}/3 signals: "
+        f"{domain} triggered {signals}/7 signals: "
         + "; ".join(reasons) + ". "
-        + (f"With {signals} signals converging (confidence {confidence:.0%}), "
-           f"the 2-of-3 rule classifies this as synthetic."
-           if signals >= 2 else
-           f"Single signal detected (confidence {confidence:.0%}) — "
-           f"flagged for human review.")
+        + (f"With {signals} signals converging, the 3-of-7 rule classifies this as a synthetic network."
+           if signals >= 3 else
+           f"{signals} signal(s) detected — flagged for human review. Not enough to confirm a fake network alone.")
     )
 
 
@@ -179,9 +215,9 @@ def produce_verdict(features: dict, sim_edges: dict) -> dict:
     Main verdict function.
     Runs GNN inference and produces final verdict for all domains.
     
-    Verdict logic (2-of-3 rule):
-    - SYNTHETIC: 2 or more signals triggered
-    - REVIEW: exactly 1 signal triggered
+    Verdict logic (3-of-7 rule):
+    - SYNTHETIC: 3 or more signals triggered
+    - REVIEW: 1–2 signals triggered
     - ORGANIC: no signals triggered
     
     Confidence is computed from signal strength + similarity scores,
@@ -215,34 +251,45 @@ def produce_verdict(features: dict, sim_edges: dict) -> dict:
             syn_prob = float(synthetic_probs[i])
             signals  = int(feats.get('signals_triggered', 0))
 
-            # Compute real confidence from signals + features
             confidence = compute_confidence(feats, syn_prob)
 
-            # Verdict based on 2-of-3 rule
-            if signals >= 2:
+            # Verdict — 3-of-7 rule
+            if signals >= 3:
                 verdict = 'SYNTHETIC'
-            elif signals == 1:
+            elif signals >= 1:
                 verdict = 'REVIEW'
             else:
                 verdict = 'ORGANIC'
-                # Compute organic confidence directly: high when no signals and
-                # no soft indicators; gently reduced by similarity/burst presence.
-                sim_boost_org    = float(feats.get('max_similarity', 0)) * 0.3
-                cadence_boost_org = float(feats.get('burst_score', 0)) * 0.2
-                gnn_boost_org    = syn_prob * 0.05
-                confidence = round(max(0.55, min(1.0 - (sim_boost_org + cadence_boost_org + gnn_boost_org), 0.97)), 2)
+                sim_boost_org     = min(float(feats.get('max_similarity', 0)) * 0.20, 0.20)
+                cadence_boost_org = min(float(feats.get('burst_score', 0)) * 0.15, 0.10)
+                gnn_boost_org     = syn_prob * 0.05
+                confidence = round(max(0.70, min(1.0 - (sim_boost_org + cadence_boost_org + gnn_boost_org), 0.97)), 2)
 
-            explanation = generate_explanation(domain, feats, confidence)
+            explanation = generate_explanation(domain, feats)
 
             verdicts[domain] = {
-                'verdict':             verdict,
-                'confidence':          confidence,
-                'gnn_raw_score':       round(syn_prob, 4),
-                'signals_triggered':   signals,
-                'signal_1_similarity': int(feats.get('similarity_flag', 0)),
-                'signal_2_cadence':    int(feats.get('cadence_flagged', 0)),
-                'signal_3_whois':      int(feats.get('whois_flagged', 0)),
-                'explanation':         explanation,
+                'verdict':               verdict,
+                'confidence':            confidence,
+                'gnn_raw_score':         round(syn_prob, 4),
+                'signals_triggered':     signals,
+                'signal_1_similarity':   int(feats.get('similarity_flag', 0)),
+                'signal_2_cadence':      int(feats.get('cadence_flagged', 0)),
+                'signal_3_whois':        int(feats.get('whois_flagged', 0)),
+                'signal_4_hosting':      int(feats.get('hosting_flagged', 0)),
+                'signal_5_link_network': int(feats.get('link_network_flagged', 0)),
+                'signal_6_wayback':      int(feats.get('wayback_flagged', 0)),
+                'signal_7_authors':      int(feats.get('author_overlap_flagged', 0)),
+                # Pass through display fields
+                'max_similarity':        float(feats.get('max_similarity', 0)),
+                'burst_score':           float(feats.get('burst_score', 0)),
+                'domain_age_days':       int(feats.get('domain_age_days', -1)),
+                'ip_address':            str(feats.get('ip_address', '')),
+                'hosting_org':           str(feats.get('hosting_org', '')),
+                'insular_score':         float(feats.get('insular_score', 0)),
+                'wayback_snapshot_count': int(feats.get('wayback_snapshot_count', 0)),
+                'wayback_flag_reason':   str(feats.get('wayback_flag_reason', '')),
+                'shared_authors':        str(feats.get('shared_authors', '[]')),
+                'explanation':           explanation,
             }
 
         synthetic_count = sum(1 for v in verdicts.values() if v['verdict'] == 'SYNTHETIC')

@@ -27,12 +27,17 @@ def upsert_domain_nodes(driver, features: dict, excerpts: dict = None) -> int:
     """
     Create or update domain nodes in Neo4j.
     Uses MERGE so existing nodes get updated, not duplicated.
-    excerpts: optional dict of domain -> text excerpt for evidence display.
     """
     excerpts = excerpts or {}
     nodes_created = 0
     with driver.session() as session:
         for domain, feats in features.items():
+            signals = int(feats.get('signals_triggered', 0))
+            preliminary_verdict = (
+                'SYNTHETIC' if signals >= 3
+                else 'REVIEW' if signals >= 1
+                else 'ORGANIC'
+            )
             session.run("""
                 MERGE (d:Domain {domain: $domain})
                 SET d.avg_similarity    = $avg_similarity,
@@ -44,28 +49,52 @@ def upsert_domain_nodes(driver, features: dict, excerpts: dict = None) -> int:
                     d.domain_age_days   = $domain_age_days,
                     d.registrar         = $registrar,
                     d.whois_flagged     = $whois_flagged,
-                    d.signals_triggered = $signals_triggered,
-                    d.preliminary_verdict = $preliminary_verdict,
-                    d.excerpt           = $excerpt,
-                    d.updated_at        = timestamp()
+                    d.ip_address              = $ip_address,
+                    d.asn                     = $asn,
+                    d.hosting_org             = $hosting_org,
+                    d.hosting_flagged         = $hosting_flagged,
+                    d.mutual_link_count       = $mutual_link_count,
+                    d.insular_score           = $insular_score,
+                    d.link_network_flagged    = $link_network_flagged,
+                    d.wayback_snapshot_count  = $wayback_snapshot_count,
+                    d.wayback_first_seen      = $wayback_first_seen,
+                    d.wayback_recent_count    = $wayback_recent_count,
+                    d.wayback_flagged         = $wayback_flagged,
+                    d.wayback_flag_reason     = $wayback_flag_reason,
+                    d.shared_authors          = $shared_authors,
+                    d.author_overlap_flagged  = $author_overlap_flagged,
+                    d.signals_triggered       = $signals_triggered,
+                    d.preliminary_verdict     = $preliminary_verdict,
+                    d.excerpt                 = $excerpt,
+                    d.updated_at              = timestamp()
             """,
             domain=domain,
-            avg_similarity   = float(feats.get('avg_similarity', 0)),
-            max_similarity   = float(feats.get('max_similarity', 0)),
-            similarity_flag  = int(feats.get('similarity_flag', 0)),
-            anomaly_score    = float(feats.get('anomaly_score', 0)),
-            cadence_flagged  = int(feats.get('cadence_flagged', 0)),
-            burst_score      = float(feats.get('burst_score', 0)),
-            domain_age_days  = int(feats.get('domain_age_days', -1)),
-            registrar        = str(feats.get('registrar', 'unknown'))[:80],
-            whois_flagged    = int(feats.get('whois_flagged', 0)),
-            signals_triggered = int(feats.get('signals_triggered', 0)),
-            preliminary_verdict = (
-                'SYNTHETIC' if feats.get('signals_triggered', 0) >= 2
-                else 'REVIEW' if feats.get('signals_triggered', 0) == 1
-                else 'ORGANIC'
-            ),
-            excerpt = str(excerpts.get(domain, ''))[:400])
+            avg_similarity        = float(feats.get('avg_similarity', 0)),
+            max_similarity        = float(feats.get('max_similarity', 0)),
+            similarity_flag       = int(feats.get('similarity_flag', 0)),
+            anomaly_score         = float(feats.get('anomaly_score', 0)),
+            cadence_flagged       = int(feats.get('cadence_flagged', 0)),
+            burst_score           = float(feats.get('burst_score', 0)),
+            domain_age_days       = int(feats.get('domain_age_days', -1)),
+            registrar             = str(feats.get('registrar', 'unknown'))[:80],
+            whois_flagged         = int(feats.get('whois_flagged', 0)),
+            ip_address            = str(feats.get('ip_address', '')),
+            asn                   = str(feats.get('asn', '')),
+            hosting_org           = str(feats.get('hosting_org', ''))[:100],
+            hosting_flagged       = int(feats.get('hosting_flagged', 0)),
+            mutual_link_count     = int(feats.get('mutual_link_count', 0)),
+            insular_score         = float(feats.get('insular_score', 0)),
+            link_network_flagged  = int(feats.get('link_network_flagged', 0)),
+            wayback_snapshot_count = int(feats.get('wayback_snapshot_count', 0)),
+            wayback_first_seen    = str(feats.get('wayback_first_seen', '')),
+            wayback_recent_count  = int(feats.get('wayback_recent_count', 0)),
+            wayback_flagged       = int(feats.get('wayback_flagged', 0)),
+            wayback_flag_reason   = str(feats.get('wayback_flag_reason', '')),
+            shared_authors        = str(feats.get('shared_authors', '[]'))[:200],
+            author_overlap_flagged = int(feats.get('author_overlap_flagged', 0)),
+            signals_triggered     = signals,
+            preliminary_verdict   = preliminary_verdict,
+            excerpt               = str(excerpts.get(domain, ''))[:400])
             nodes_created += 1
 
     return nodes_created
@@ -99,6 +128,40 @@ def upsert_similarity_edges(driver, sim_edges: dict) -> int:
             flagged=1 if float(score) >= SIM_EDGE_FLAG_THRESHOLD else 0)
             edges_created += 1
 
+    return edges_created
+
+
+def upsert_host_edges(driver, host_edges: dict) -> int:
+    """Create SAME_HOST edges between domains sharing IP or ASN."""
+    edges_created = 0
+    with driver.session() as session:
+        for key, edge_type in host_edges.items():
+            domain_a, domain_b = key.split("|||")
+            session.run("""
+                MATCH (a:Domain {domain: $domain_a})
+                MATCH (b:Domain {domain: $domain_b})
+                MERGE (a)-[r:SAME_HOST {domain_a: $domain_a, domain_b: $domain_b}]->(b)
+                SET r.edge_type  = $edge_type,
+                    r.updated_at = timestamp()
+            """, domain_a=domain_a, domain_b=domain_b, edge_type=edge_type)
+            edges_created += 1
+    return edges_created
+
+
+def upsert_author_edges(driver, author_edges: dict) -> int:
+    """Create SHARED_AUTHOR edges between domains that share an author byline."""
+    edges_created = 0
+    with driver.session() as session:
+        for key, author in author_edges.items():
+            domain_a, domain_b = key.split("|||")
+            session.run("""
+                MATCH (a:Domain {domain: $domain_a})
+                MATCH (b:Domain {domain: $domain_b})
+                MERGE (a)-[r:SHARED_AUTHOR {domain_a: $domain_a, domain_b: $domain_b}]->(b)
+                SET r.author     = $author,
+                    r.updated_at = timestamp()
+            """, domain_a=domain_a, domain_b=domain_b, author=str(author)[:100])
+            edges_created += 1
     return edges_created
 
 
@@ -137,34 +200,43 @@ def build_graph(analysis_result: dict) -> dict:
     """
     print(f"🏗️  Graph Builder Agent starting...")
 
-    features  = analysis_result.get('features', {})
-    sim_edges = analysis_result.get('sim_edges', {})
-    excerpts  = analysis_result.get('excerpts', {})
+    features     = analysis_result.get('features', {})
+    sim_edges    = analysis_result.get('sim_edges', {})
+    excerpts     = analysis_result.get('excerpts', {})
+    host_edges   = analysis_result.get('host_edges', {})
+    author_edges = analysis_result.get('author_edges', {})
 
     print(f"   Domains to upsert: {len(features)}")
-    print(f"   Edges to upsert:   {len(sim_edges)}")
+    print(f"   Sim edges:         {len(sim_edges)}")
+    print(f"   Host edges:        {len(host_edges)}")
+    print(f"   Author edges:      {len(author_edges)}")
 
     try:
         driver = get_driver()
         driver.verify_connectivity()
 
-        # Upsert nodes (with excerpts for evidence display)
         nodes_created = upsert_domain_nodes(driver, features, excerpts)
         print(f"   ✅ {nodes_created} domain nodes upserted")
 
-        # Upsert edges
         edges_created = upsert_similarity_edges(driver, sim_edges)
         print(f"   ✅ {edges_created} similarity edges upserted")
 
-        # Get stats
+        host_edges_created = upsert_host_edges(driver, host_edges)
+        print(f"   ✅ {host_edges_created} host edges upserted")
+
+        author_edges_created = upsert_author_edges(driver, author_edges)
+        print(f"   ✅ {author_edges_created} author edges upserted")
+
         stats = get_graph_stats(driver)
         driver.close()
 
         result = {
-            'nodes_upserted': nodes_created,
-            'edges_upserted': edges_created,
-            'graph_stats':    stats,
-            'status':         'success',
+            'nodes_upserted':        nodes_created,
+            'edges_upserted':        edges_created,
+            'host_edges_upserted':   host_edges_created,
+            'author_edges_upserted': author_edges_created,
+            'graph_stats':           stats,
+            'status':                'success',
         }
 
     except Exception as e:

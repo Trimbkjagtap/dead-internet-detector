@@ -63,9 +63,11 @@ def run_analysis(seed_domains: list) -> dict:
     print("━" * 40)
     analysis = analyze_domains(crawled_data)
 
-    features  = analysis.get('features', {})
-    sim_edges = analysis.get('sim_edges', {})
-    excerpts  = analysis.get('excerpts', {})
+    features     = analysis.get('features', {})
+    sim_edges    = analysis.get('sim_edges', {})
+    excerpts     = analysis.get('excerpts', {})
+    host_edges   = analysis.get('host_edges', {})
+    author_edges = analysis.get('author_edges', {})
 
     print(f"  Features computed for {len(features)} domains")
     print()
@@ -115,7 +117,7 @@ def run_analysis(seed_domains: list) -> dict:
     if failed:
         summary += f" Note: {len(failed)} domain(s) could not be crawled: {', '.join(failed)}."
 
-    # Build evidence pairs: one entry per flagged similarity edge
+    # Build content similarity evidence pairs
     evidence_pairs = []
     for key, score in sim_edges.items():
         if "|||" in str(key):
@@ -131,12 +133,38 @@ def run_analysis(seed_domains: list) -> dict:
             'excerpt_a':  excerpts.get(a, ''),
             'excerpt_b':  excerpts.get(b, ''),
         })
-    # Sort highest similarity first
     evidence_pairs.sort(key=lambda x: x['similarity'], reverse=True)
+
+    # Build hosting evidence (shared IP/ASN)
+    hosting_evidence = []
+    for key, edge_type in host_edges.items():
+        a, b = key.split("|||")
+        hosting_evidence.append({'domain_a': a, 'domain_b': b, 'edge_type': edge_type})
+
+    # Build author evidence (shared bylines)
+    author_evidence = []
+    seen_author_keys = set()
+    for key, author in author_edges.items():
+        if key not in seen_author_keys:
+            seen_author_keys.add(key)
+            a, b = key.split("|||")
+            author_evidence.append({'domain_a': a, 'domain_b': b, 'author': author})
+
+    if cluster == 'SYNTHETIC':
+        headline  = "High Risk - Likely part of a fake network"
+        risk_level = "HIGH_RISK"
+    elif cluster == 'REVIEW':
+        headline  = "Suspicious - Some warning signs detected"
+        risk_level = "SUSPICIOUS"
+    else:
+        headline  = "Looks Legitimate - No warning signs"
+        risk_level = "LOW_RISK"
 
     final_result = {
         'cluster_verdict':   cluster,
         'max_confidence':    conf,
+        'risk_level':        risk_level,
+        'headline':          headline,
         'synthetic_domains': verdict.get('synthetic_domains', 0),
         'review_domains':    verdict.get('review_domains', 0),
         'organic_domains':   verdict.get('organic_domains', 0),
@@ -147,6 +175,8 @@ def run_analysis(seed_domains: list) -> dict:
         'domains_analyzed':  len(features),
         'failed_domains':    failed,
         'evidence_pairs':    evidence_pairs,
+        'hosting_evidence':  hosting_evidence,
+        'author_evidence':   author_evidence,
     }
 
     # ── Print final summary ─────────────────────────
