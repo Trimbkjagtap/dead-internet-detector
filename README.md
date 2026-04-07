@@ -20,6 +20,21 @@ Rather than judging one article in isolation, it checks whether a group of domai
 
 ---
 
+## What Changed In V4
+
+V4 delivers a complete Live Monitor Dashboard redesign focused on data transparency for journalists and researchers:
+
+- **Stacked bar chart** replaces broken dual-axis line chart — each monitor run shows one bar with green (organic) and red (synthetic) segments, making the escalating threat trend immediately visible
+- **Status bar** with live threat level, proportion bar, feed counts, and data freshness indicator (replacing disconnected floating widgets)
+- **Run history list** — all 10+ historical runs displayed as compact rows with mini proportion bars and HIGH/MED/OK chips; no text wrapping
+- **Pipeline health summary** — cumulative totals (total batches, synthetic count + %, organic count + %) computed from full run history
+- **Flagged domains section** — surfaces domains flagged across all pipeline runs via `/recently-detected` endpoint (Neo4j-backed); graceful empty state when graph is offline
+- **GPT-4o-mini journalist briefing** confirmed as advisory-only with disclaimer
+- **Streamlit 1.55 compatibility** — replaced all deprecated `use_container_width=True` with `width="stretch"`; fixed inline flex sanitization using CSS `linear-gradient` single-div proportion bars
+- **CSS cleanup** — removed all first-redesign dead classes; added focused `.monitor-status-bar`, `.run-row`, `.chip-*`, `.health-stat`, `.mon-section` classes
+
+---
+
 ## What Changed In V3
 
 V3 expands the detection system from 3 signals to 7 and adds a journalist-facing evidence UI:
@@ -101,7 +116,7 @@ A domain is flagged **SYNTHETIC** when at least 3 of 7 signals converge. 1–2 s
 | Component | Technology | Purpose |
 |-----------|------------|---------|
 | Multi-Agent Pipeline | 4 custom agents (Crawler, Fingerprint, Graph Builder, Verdict) | End-to-end analysis orchestration |
-| LLM Analysis | OpenAI GPT-4o | Journalist-facing AI assessment |
+| LLM Analysis | OpenAI GPT-4o-mini | Journalist-facing AI assessment (advisory only) |
 | Domain Classification | Graph Convolutional Network (GCN) | Cluster-level synthetic/organic classification |
 | Anomaly Detection | Isolation Forest | Cadence anomaly scoring |
 | Content Embeddings | Sentence Transformers `all-MiniLM-L6-v2` | Semantic similarity |
@@ -357,3 +372,4 @@ If any API keys were exposed during development or testing, rotate them immediat
 ---
 
 Built by Trimbkeshwar Jagtap | Northeastern University
+

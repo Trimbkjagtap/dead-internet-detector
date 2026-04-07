@@ -275,6 +275,87 @@ st.markdown("""
     .feed-warn { border-left: 4px solid #f97316; }
     .feed-off  { border-left: 4px solid #ef4444; }
 
+    /* ── Monitor status bar ── */
+    .monitor-status-bar {
+        background: rgba(255,255,255,0.025);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 14px; padding: 16px 24px; margin-bottom: 22px;
+    }
+    .monitor-status-bar--high { animation: monitor-pulse 2s ease-in-out infinite; }
+    @keyframes monitor-pulse {
+        0%,100% { border-color: rgba(239,68,68,0.20); }
+        50%      { border-color: rgba(239,68,68,0.55); }
+    }
+    .msb-label {
+        font-size: 10px; font-weight: 700; letter-spacing: 1.5px;
+        text-transform: uppercase; color: #475569; margin-bottom: 3px;
+    }
+    .msb-value { font-size: 1.05rem; font-weight: 700; color: #f1f5f9; line-height: 1.2; }
+    .msb-sub   { font-size: 11px; color: #64748b; margin-top: 3px; }
+
+    /* ── KPI tiles ── */
+    .kpi-tile {
+        background: rgba(255,255,255,0.025);
+        border: 1px solid rgba(255,255,255,0.07);
+        border-radius: 14px; padding: 16px 18px;
+    }
+    .kpi-tile-value {
+        font-size: 2rem; font-weight: 700; color: #f1f5f9;
+        line-height: 1; margin: 8px 0 4px;
+    }
+    .kpi-tile-label {
+        font-size: 11px; font-weight: 600; letter-spacing: 1px;
+        text-transform: uppercase; color: #64748b;
+    }
+    .kpi-tile-sub { font-size: 12px; color: #475569; margin-top: 6px; }
+
+    /* ── Proportion bar (2-segment: synthetic | organic) ── */
+    .prop-bar {
+        display: flex; height: 6px; border-radius: 6px;
+        overflow: hidden; margin: 8px 0 4px; gap: 1px;
+    }
+    .prop-seg-red   { background: #ef4444; box-shadow: 0 0 6px rgba(239,68,68,0.50); }
+    .prop-seg-green { background: #22c55e; opacity: 0.75; }
+
+    /* ── Run history rows ── */
+    .run-row {
+        display: flex; align-items: center; gap: 10px;
+        padding: 9px 14px; border-radius: 9px; margin: 3px 0;
+        background: rgba(255,255,255,0.02);
+        border: 1px solid rgba(255,255,255,0.05);
+        font-size: 13px; color: #94a3b8;
+    }
+    .run-row:hover { background: rgba(59,130,246,0.05); }
+    .run-ts    { color: #64748b; font-size: 12px; min-width: 120px; font-variant-numeric: tabular-nums; }
+    .run-bar   { min-width: 72px; }
+    .run-ratio { font-size: 11px; color: #475569; min-width: 26px; font-variant-numeric: tabular-nums; }
+    .run-chip  {
+        display: inline-block; padding: 2px 9px; border-radius: 20px;
+        font-size: 11px; font-weight: 700; letter-spacing: 0.5px;
+    }
+    .chip-high { background: rgba(239,68,68,0.15); color: #fca5a5; border: 1px solid rgba(239,68,68,0.35); }
+    .chip-med  { background: rgba(249,115,22,0.15); color: #fdba74; border: 1px solid rgba(249,115,22,0.35); }
+    .chip-ok   { background: rgba(34,197,94,0.12);  color: #86efac; border: 1px solid rgba(34,197,94,0.28); }
+
+    /* ── Pipeline health summary stats ── */
+    .health-stat { text-align: center; padding: 14px 0; }
+    .health-stat-value { font-size: 1.6rem; font-weight: 700; line-height: 1; margin-bottom: 4px; }
+    .health-stat-label {
+        font-size: 11px; font-weight: 600; letter-spacing: 1px;
+        text-transform: uppercase; color: #475569;
+    }
+
+    /* ── Monitor divider label ── */
+    .mon-section {
+        font-size: 10px; font-weight: 700; letter-spacing: 1.8px;
+        text-transform: uppercase; color: #3b82f6; margin: 22px 0 12px;
+        display: flex; align-items: center; gap: 10px;
+    }
+    .mon-section::after {
+        content: ""; flex: 1; height: 1px;
+        background: linear-gradient(90deg, rgba(59,130,246,0.25), transparent);
+    }
+
     /* ── Summary banner ── */
     .summary-banner {
         background: rgba(59,130,246,0.06);
@@ -428,7 +509,7 @@ with tab_analyze:
         check_clicked = st.button(
             "Check",
             type="primary",
-            use_container_width=True,
+            width="stretch",
             disabled=(not domain_input.strip()),
         )
 
@@ -695,7 +776,7 @@ with tab_analyze:
                             margin=dict(l=20, r=20, t=20, b=20),
                         ),
                     )
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, width="stretch")
                     st.caption(
                         f"**{graph_domain}** shares similar content with **{len(neighbor_nodes)}** "
                         f"other domain(s). Lines connect domains above the 0.45 similarity threshold."
@@ -756,7 +837,7 @@ with tab_analyze:
                     paper_bgcolor="#0e1117", plot_bgcolor="#0e1117",
                     font_color="#e0e0e0", height=360,
                 )
-                st.plotly_chart(fig2, use_container_width=True)
+                st.plotly_chart(fig2, width="stretch")
 
                 sm1, sm2, sm3 = st.columns(3)
                 with sm1: st.metric("Max signals fired", f"{int(df_sig['Signals'].max())}/7")
@@ -1094,10 +1175,10 @@ Provide: (1) what the triggered signals suggest about coordination, (2) whether 
                 data=json.dumps(report, indent=2),
                 file_name="dead_internet_report.json",
                 mime="application/json",
-                use_container_width=True,
+                width="stretch",
             )
         with share_col:
-            if st.button("🔗 Generate Shareable Link", use_container_width=True):
+            if st.button("🔗 Generate Shareable Link", width="stretch"):
                 try:
                     save_resp = requests.post(
                         f"{BACKEND_URL}/report/save",
@@ -1127,170 +1208,434 @@ Provide: (1) what the triggered signals suggest about coordination, (2) whether 
 # ══════════════════════════════════════════════════════
 with tab_monitor:
 
-    st.markdown("#### 📡 Live Monitor Dashboard")
-    st.markdown(
-        '<div class="info-card">'
-        '<div class="info-card-body">'
-        'The monitor automatically ingests newly registered domains (from WHOISDS) and domains '
-        'shared on Reddit, then runs them through the same 4-agent detection pipeline. '
-        'Use <b>Start Monitor Cycle</b> below to trigger a run manually.'
-        '</div></div>',
-        unsafe_allow_html=True,
-    )
-
-    st.divider()
-
-    # ── Feed status ───────────────────────────────────
-    st.markdown("### Feed Status")
-    feed   = api_get("/feed-status")
-    latest = feed.get("latest") if feed else None
-
-    col_w, col_r, col_q, col_b = st.columns(4)
-
-    if latest:
-        whoisds_n   = latest.get("whoisds_count",    0)
-        reddit_n    = latest.get("reddit_count",      0)
-        queued_n    = latest.get("queued_unique",      0)
-        batches_n   = latest.get("batches",            0)
-        syn_batches = latest.get("synthetic_batches",  0)
-        ran_at      = latest.get("ran_at", "never")
-
-        with col_w:
-            st.metric("WHOISDS Domains", whoisds_n, help="Newly registered domains from WHOISDS feed")
-            st.caption("✅ Feed active" if whoisds_n > 0 else "⚠️ Feed not configured")
-        with col_r:
-            st.metric("Reddit Domains", reddit_n, help="Domains extracted from Reddit posts")
-            st.caption("✅ Feed active" if reddit_n > 0 else "⚠️ No domains found")
-        with col_q:
-            st.metric("Queued for Analysis", queued_n, help="Unique domains sent to the detection pipeline")
-        with col_b:
-            st.metric("Synthetic Batches", f"{syn_batches}/{batches_n}", help="Batches where synthetic content was detected")
-
-        try:
-            from datetime import datetime
-            dt        = datetime.fromisoformat(ran_at.replace("Z", "+00:00"))
-            nice_time = dt.strftime("%b %d, %Y at %H:%M UTC")
-        except Exception:
-            nice_time = ran_at
-        st.caption(f"Last monitor run: **{nice_time}**")
-    else:
-        with col_w: st.metric("WHOISDS Domains", "—")
-        with col_r: st.metric("Reddit Domains",  "—")
-        with col_q: st.metric("Queued",           "—")
-        with col_b: st.metric("Synthetic",        "—")
-        st.info("No monitor runs yet. Click **Start Monitor Cycle** below to begin.")
-
-    st.divider()
-
-    # ── Timeline chart ────────────────────────────────
-    st.markdown("### Monitor Run Timeline")
+    # ── Fetch all data up-front ───────────────────────
+    feed          = api_get("/feed-status")
+    latest        = feed.get("latest") if feed else None
     timeline_data = api_get("/timeline?limit=20")
     timeline      = timeline_data.get("timeline", []) if timeline_data else []
 
+    # Derived values
+    if latest:
+        whoisds_n   = latest.get("whoisds_count",   0)
+        reddit_n    = latest.get("reddit_count",    0)
+        queued_n    = latest.get("queued_unique",   0)
+        batches_n   = latest.get("batches",         0)
+        syn_batches = latest.get("synthetic_batches", 0)
+        ran_at_raw  = latest.get("ran_at", "")
+        threat_rate = (syn_batches / batches_n) if batches_n > 0 else 0.0
+        try:
+            from datetime import datetime as _dt, timezone as _tz
+            _d        = _dt.fromisoformat(ran_at_raw.replace("Z", "+00:00"))
+            nice_time = _d.strftime("%b %d, %Y · %H:%M UTC")
+            hours_ago = (_dt.now(_tz.utc) - _d).total_seconds() / 3600
+        except Exception:
+            nice_time = ran_at_raw or "—"
+            hours_ago = None
+    else:
+        whoisds_n = reddit_n = queued_n = batches_n = syn_batches = 0
+        threat_rate = 0.0
+        nice_time = "No runs yet"
+        hours_ago = None
+
+    # ── Status bar ────────────────────────────────────
+    threat_color = "#ef4444" if threat_rate >= 0.5 else ("#f97316" if threat_rate >= 0.25 else "#22c55e")
+    threat_label = "HIGH"    if threat_rate >= 0.5 else ("ELEVATED" if threat_rate >= 0.25 else "NORMAL")
+    pulse_cls    = "monitor-status-bar--high" if threat_rate >= 0.5 else ""
+
+    if hours_ago is not None:
+        freshness_color = "#22c55e" if hours_ago < 6 else ("#f97316" if hours_ago < 24 else "#ef4444")
+        freshness_txt   = f"{hours_ago:.1f}h ago"
+    else:
+        freshness_color, freshness_txt = "#64748b", "—"
+
+    syn_pct = int(threat_rate * 100)
+    org_pct = 100 - syn_pct
+
+    # Status bar: use st.columns so Streamlit layout handles the flex, not raw HTML
+    bar_border = "1px solid rgba(239,68,68,0.45)" if threat_rate >= 0.5 else "1px solid rgba(255,255,255,0.08)"
+    st.markdown(
+        f'<div class="monitor-status-bar {pulse_cls}" style="border:{bar_border};padding:0;"></div>',
+        unsafe_allow_html=True,
+    )
+    sb_c1, sb_c2, sb_c3, sb_c4 = st.columns([2, 1.5, 1.2, 1])
+    with sb_c1:
+        st.markdown(
+            f'<div class="msb-label">📡 Live Monitor</div>'
+            f'<div class="msb-value">Dead Internet Detector</div>'
+            f'<div class="msb-sub"><span style="color:{freshness_color};font-weight:600;">●</span> '
+            f'Last run {freshness_txt} · {nice_time}</div>',
+            unsafe_allow_html=True,
+        )
+    with sb_c2:
+        _sb_grad = (f"linear-gradient(90deg, {threat_color} {syn_pct}%, rgba(34,197,94,0.55) {syn_pct}%)"
+                    if syn_pct > 0 else "rgba(34,197,94,0.55)")
+        st.markdown(
+            f'<div class="msb-label">Threat Level</div>'
+            f'<div class="msb-value" style="color:{threat_color};font-size:1.3rem;letter-spacing:1px;">{threat_label}</div>'
+            f'<div style="height:4px;border-radius:4px;margin-top:6px;background:{_sb_grad};"></div>',
+            unsafe_allow_html=True,
+        )
+    with sb_c3:
+        st.markdown(
+            f'<div class="msb-label">Feeds</div>'
+            f'<div class="msb-value">{reddit_n} <span style="font-size:0.75rem;color:#475569;">Reddit</span></div>'
+            f'<div class="msb-sub">{whoisds_n} WHOISDS</div>',
+            unsafe_allow_html=True,
+        )
+    with sb_c4:
+        st.markdown(
+            f'<div class="msb-label">This Cycle</div>'
+            f'<div class="msb-value">{queued_n} <span style="font-size:0.75rem;color:#475569;">queued</span></div>'
+            f'<div class="msb-sub">{batches_n} batches · {syn_batches} synthetic</div>',
+            unsafe_allow_html=True,
+        )
+    st.markdown("<div style='margin-bottom:8px;'></div>", unsafe_allow_html=True)
+
+    # ── Feed intelligence tiles ───────────────────────
+    st.markdown('<div class="mon-section">Feed Intelligence</div>', unsafe_allow_html=True)
+
+    c1, c2, c3, c4 = st.columns(4)
+
+    reddit_dot  = '<span style="color:#22c55e;">●</span> Active'       if reddit_n  > 0 else '<span style="color:#ef4444;">●</span> No data'
+    whoisds_dot = '<span style="color:#22c55e;">●</span> Active'       if whoisds_n > 0 else '<span style="color:#eab308;">●</span> Not configured'
+
+    c1.markdown(
+        f'<div class="kpi-tile" style="border-left:3px solid #3b82f6;">'
+        f'<div class="kpi-tile-label">Reddit</div>'
+        f'<div class="kpi-tile-value">{reddit_n}</div>'
+        f'<div class="kpi-tile-sub">{reddit_dot}</div>'
+        f'<div class="kpi-tile-sub" style="color:#334155;font-size:11px;">r/worldnews · r/politics · r/news · r/conspiracy</div>'
+        f'</div>', unsafe_allow_html=True)
+
+    c2.markdown(
+        f'<div class="kpi-tile" style="border-left:3px solid #8b5cf6;">'
+        f'<div class="kpi-tile-label">WHOISDS</div>'
+        f'<div class="kpi-tile-value">{whoisds_n}</div>'
+        f'<div class="kpi-tile-sub">{whoisds_dot}</div>'
+        f'<div class="kpi-tile-sub" style="color:#334155;font-size:11px;">New registrations feed</div>'
+        f'</div>', unsafe_allow_html=True)
+
+    c3.markdown(
+        f'<div class="kpi-tile" style="border-left:3px solid #06b6d4;">'
+        f'<div class="kpi-tile-label">Queued</div>'
+        f'<div class="kpi-tile-value">{queued_n}</div>'
+        f'<div class="kpi-tile-sub">Sent to pipeline</div>'
+        f'<div class="kpi-tile-sub" style="color:#334155;font-size:11px;">10 domains per batch</div>'
+        f'</div>', unsafe_allow_html=True)
+
+    # Proportion bar as a single-div gradient (avoids flex children being sanitized)
+    _org_n   = batches_n - syn_batches
+    _syn_w   = int(syn_pct)
+    _grad    = (f"linear-gradient(90deg, {threat_color} {_syn_w}%, rgba(34,197,94,0.65) {_syn_w}%)"
+                if batches_n > 0 else "rgba(255,255,255,0.06)")
+    c4.markdown(
+        f'<div class="kpi-tile" style="border-left:3px solid {threat_color};">'
+        f'<div class="kpi-tile-label">Synthetic Rate</div>'
+        f'<div class="kpi-tile-value" style="color:{threat_color};">{syn_pct}%</div>'
+        f'<div style="height:6px;border-radius:6px;margin:8px 0 4px;background:{_grad};"></div>'
+        f'<div class="kpi-tile-sub">{syn_batches} synthetic · {_org_n} organic</div>'
+        f'</div>', unsafe_allow_html=True)
+
+    # ── Threat trend chart + run history ─────────────
+    st.markdown('<div class="mon-section">Threat Trend &amp; Run History</div>', unsafe_allow_html=True)
+
+    df_full = pd.DataFrame()   # initialised here; populated inside the timeline block
     if timeline and len(timeline) >= 1:
         df_tl = pd.DataFrame(timeline)
         if "ran_at" in df_tl.columns:
             df_tl["ran_at"] = pd.to_datetime(df_tl["ran_at"], utc=True, errors="coerce")
             df_tl = df_tl.dropna(subset=["ran_at"]).sort_values("ran_at")
+            df_full = df_tl.copy()   # authoritative copy for cumulative stats
 
-            rename_map = {}
-            if "queued_unique"      in df_tl.columns: rename_map["queued_unique"]      = "Queued"
-            if "reddit_count"       in df_tl.columns: rename_map["reddit_count"]       = "Reddit"
-            if "whoisds_count"      in df_tl.columns: rename_map["whoisds_count"]      = "WHOISDS"
-            if "synthetic_batches"  in df_tl.columns: rename_map["synthetic_batches"]  = "Synthetic Batches"
-            df_tl = df_tl.rename(columns=rename_map)
-            y_cols = [c for c in ["Queued","Reddit","WHOISDS","Synthetic Batches"] if c in df_tl.columns]
+            chart_col, hist_col = st.columns([3, 2])
 
-            if not df_tl.empty and y_cols:
-                fig_tl = px.line(
-                    df_tl, x="ran_at", y=y_cols,
-                    title="Domains Ingested & Analyzed Over Time",
-                    markers=True,
-                    color_discrete_sequence=["#3498db","#e74c3c","#e67e22","#9b59b6"],
+            with chart_col:
+                # Use run index as x-axis to avoid duplicate date labels collapsing bars
+                syn_vals = df_tl["synthetic_batches"].fillna(0).astype(int) if "synthetic_batches" in df_tl.columns else pd.Series([0]*len(df_tl))
+                org_vals = (df_tl["batches"].fillna(0).astype(int) - syn_vals).clip(lower=0) if "batches" in df_tl.columns else pd.Series([0]*len(df_tl))
+                # Use sequential run indices as x-axis — timestamps can duplicate within same minute
+                n_runs    = len(df_tl)
+                run_idx   = [f"Run {i+1}" for i in range(n_runs)]
+                hover_ts  = df_tl["ran_at"].dt.strftime("%b %d, %Y · %H:%M UTC").tolist()
+
+                fig_bar = go.Figure()
+                fig_bar.add_trace(go.Bar(
+                    x=run_idx, y=org_vals, name="Organic",
+                    marker_color="#22c55e", marker_opacity=0.65,
+                    customdata=hover_ts,
+                    hovertemplate="<b>%{customdata}</b><br>Organic: %{y} batch(es)<extra></extra>",
+                ))
+                fig_bar.add_trace(go.Bar(
+                    x=run_idx, y=syn_vals, name="Synthetic",
+                    marker_color="#ef4444", marker_opacity=0.85,
+                    customdata=hover_ts,
+                    hovertemplate="<b>%{customdata}</b><br>Synthetic: %{y} batch(es)<extra></extra>",
+                ))
+                fig_bar.update_layout(
+                    barmode="stack",
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(255,255,255,0.02)",
+                    font_color="#94a3b8",
+                    height=240,
+                    margin=dict(l=0, r=0, t=36, b=0),
+                    legend=dict(
+                        bgcolor="rgba(0,0,0,0)", orientation="h",
+                        yanchor="bottom", y=1.05, xanchor="left", x=0,
+                        font=dict(size=11),
+                    ),
+                    xaxis=dict(
+                        gridcolor="rgba(255,255,255,0.04)",
+                        tickfont=dict(size=10),
+                        tickangle=0,
+                    ),
+                    yaxis=dict(
+                        gridcolor="rgba(255,255,255,0.05)", dtick=1,
+                        title=dict(text="Batches", font=dict(size=11, color="#64748b")),
+                    ),
+                    bargap=0.25,
+                    title=dict(
+                        text="Batch Composition per Run  ·  Synthetic vs Organic",
+                        font=dict(size=12, color="#64748b"), x=0,
+                    ),
                 )
-                fig_tl.update_layout(
-                    paper_bgcolor="#0e1117", plot_bgcolor="#0e1117",
-                    font_color="#e0e0e0", legend_title_text="",
-                    xaxis_title="Time",
-                    xaxis=dict(type="date", tickformat="%b %d %H:%M"),
-                    yaxis_title="Count", height=350,
+                st.plotly_chart(fig_bar, width="stretch")
+
+            with hist_col:
+                st.markdown(
+                    '<div style="font-size:10px;font-weight:700;letter-spacing:1.5px;'
+                    'text-transform:uppercase;color:#3b82f6;margin-bottom:8px;">All Runs</div>',
+                    unsafe_allow_html=True,
                 )
-                st.plotly_chart(fig_tl, use_container_width=True)
+                for _, row in df_tl.sort_values("ran_at", ascending=False).iterrows():
+                    run_ts  = row["ran_at"].strftime("%b %d · %H:%M")
+                    syn_r   = int(row.get("synthetic_batches", 0))
+                    tot_r   = int(row.get("batches", 1))
+                    rate_r  = syn_r / tot_r if tot_r > 0 else 0
+                    chip_cls = "chip-high" if rate_r >= 0.5 else ("chip-med" if rate_r > 0 else "chip-ok")
+                    chip_txt = "HIGH" if rate_r >= 0.5 else ("MED" if rate_r > 0 else "OK")
+                    org_r    = tot_r - syn_r
+                    _rw   = int(rate_r * 100)
+                    _rg   = (f"linear-gradient(90deg,#ef4444 {_rw}%,rgba(34,197,94,0.65) {_rw}%)"
+                             if tot_r > 0 else "rgba(255,255,255,0.06)")
+                    st.markdown(
+                        f'<div class="run-row">'
+                        f'<div class="run-ts">{run_ts}</div>'
+                        f'<div class="run-bar">'
+                        f'  <div style="height:4px;border-radius:4px;background:{_rg};width:72px;"></div>'
+                        f'</div>'
+                        f'<div class="run-ratio">{syn_r}/{tot_r}</div>'
+                        f'<span class="run-chip {chip_cls}">{chip_txt}</span>'
+                        f'</div>',
+                        unsafe_allow_html=True,
+                    )
     else:
         st.info("No timeline data yet. Run a monitor cycle to start collecting data points.")
 
-    st.divider()
+    # ── Pipeline health summary ───────────────────────
+    if not df_full.empty:
+        st.markdown('<div class="mon-section">Pipeline Health Summary</div>', unsafe_allow_html=True)
 
-    # ── Monitor controls ──────────────────────────────
-    st.markdown("### Run Monitor Cycle")
-    st.caption(
-        "Each cycle fetches fresh domains from Reddit (and WHOISDS if configured), "
-        "then analyzes them in batches of 10 through the full 4-agent detection pipeline."
+        all_batches   = int(df_full["batches"].sum())           if "batches"           in df_full.columns else 0
+        all_synthetic = int(df_full["synthetic_batches"].sum()) if "synthetic_batches" in df_full.columns else 0
+        all_organic   = all_batches - all_synthetic
+        all_syn_pct   = round(all_synthetic / all_batches * 100, 1) if all_batches > 0 else 0
+
+        hs1, hs2, hs3 = st.columns(3)
+        hs1.markdown(
+            f'<div class="health-stat">'
+            f'<div class="health-stat-value" style="color:#94a3b8;">{all_batches}</div>'
+            f'<div class="health-stat-label">Total Batches Analyzed</div>'
+            f'</div>', unsafe_allow_html=True)
+        hs2.markdown(
+            f'<div class="health-stat">'
+            f'<div class="health-stat-value" style="color:#ef4444;">{all_synthetic} <span style="font-size:1rem;color:#7f1d1d;">({all_syn_pct}%)</span></div>'
+            f'<div class="health-stat-label">Synthetic Flagged</div>'
+            f'</div>', unsafe_allow_html=True)
+        hs3.markdown(
+            f'<div class="health-stat">'
+            f'<div class="health-stat-value" style="color:#22c55e;">{all_organic} <span style="font-size:1rem;color:#14532d;">({100-all_syn_pct:.1f}%)</span></div>'
+            f'<div class="health-stat-label">Organic / Clean</div>'
+            f'</div>', unsafe_allow_html=True)
+
+        # Threat rate trend sparkline (single axis, no dual-axis)
+        if "synthetic_batches" in df_full.columns and "batches" in df_full.columns and len(df_full) >= 2:
+            df_full["_rate"] = (
+                df_full["synthetic_batches"].div(df_full["batches"].replace(0, 1)) * 100
+            ).round(1)
+            first_v = float(df_full["_rate"].iloc[0])
+            last_v  = float(df_full["_rate"].iloc[-1])
+            delta   = last_v - first_v
+            arrow   = "↑" if delta > 0 else ("↓" if delta < 0 else "→")
+            trend_annotation = f"{arrow} {abs(delta):.0f}pp over {len(df_full)} runs"
+
+            fig_spark = go.Figure(go.Scatter(
+                x=df_full["ran_at"],
+                y=df_full["_rate"],
+                mode="lines+markers",
+                line=dict(color="#ef4444", width=2),
+                marker=dict(size=5),
+                fill="tozeroy",
+                fillcolor="rgba(239,68,68,0.07)",
+                hovertemplate="<b>%{x|%b %d}</b>: %{y:.0f}%<extra></extra>",
+            ))
+            fig_spark.add_hline(
+                y=50, line_dash="dot", line_color="rgba(239,68,68,0.30)", line_width=1,
+                annotation_text="50%", annotation_font_size=10,
+                annotation_font_color="rgba(239,68,68,0.45)",
+            )
+            fig_spark.update_layout(
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(255,255,255,0.02)",
+                height=140,
+                margin=dict(l=0, r=0, t=28, b=0),
+                xaxis=dict(gridcolor="rgba(255,255,255,0.03)", tickfont=dict(size=10), tickformat="%b %d"),
+                yaxis=dict(
+                    gridcolor="rgba(255,255,255,0.04)",
+                    tickfont=dict(size=10, color="#64748b"),
+                    ticksuffix="%", range=[0, 105],
+                ),
+                title=dict(
+                    text=f"Synthetic Rate over Time  ·  {trend_annotation}",
+                    font=dict(size=11, color="#64748b"), x=0,
+                ),
+                showlegend=False,
+            )
+            st.plotly_chart(fig_spark, width="stretch")
+
+    # ── Flagged domains ───────────────────────────────
+    st.markdown('<div class="mon-section">Flagged Domains — All Pipeline Runs</div>', unsafe_allow_html=True)
+
+    detected = api_get("/recently-detected?limit=15")
+    if detected is None:
+        st.markdown(
+            '<div class="info-card"><div class="info-card-body">'
+            'Graph database unavailable — flagged domain results require a live Neo4j connection.'
+            '</div></div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        items = detected.get("items", [])
+        if items:
+            for item in items:
+                domain    = item.get("domain", "—")
+                verdict   = item.get("verdict", "REVIEW")
+                signals   = item.get("signals_triggered", 0)
+                reason    = item.get("reason", "")
+                _upd      = item.get("updated_at")
+                updated   = str(_upd)[:10] if _upd is not None else "—"
+                card_cls  = "evidence-high" if verdict == "SYNTHETIC" else "evidence-med"
+                pill_cls  = "signal-pill-on"
+                st.markdown(
+                    f'<div class="evidence-card {card_cls}">'
+                    f'  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">'
+                    f'    <span style="font-weight:600;color:#f1f5f9;font-size:14px;">{domain}</span>'
+                    f'    <span style="font-size:11px;color:#475569;">{updated}</span>'
+                    f'  </div>'
+                    f'  <div style="margin-top:7px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">'
+                    f'    <span class="{pill_cls}" style="font-size:11px;">{verdict}</span>'
+                    f'    <span style="font-size:12px;color:#64748b;">'
+                    f'      {signals} signal{"s" if signals != 1 else ""}'
+                    f'      {"· " + reason if reason else ""}'
+                    f'    </span>'
+                    f'  </div>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+        else:
+            st.markdown(
+                '<div class="why-not-box">'
+                'No flagged domains in the graph database yet. Run a monitor cycle below, '
+                'then use <b>Check a Domain</b> to deep-dive on any specific domain.'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+
+    # ── Run controls ──────────────────────────────────
+    st.markdown('<div class="mon-section">Run Monitor Cycle</div>', unsafe_allow_html=True)
+
+    st.markdown(
+        f'<div style="background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.07);'
+        f'border-radius:12px;padding:12px 18px;margin-bottom:14px;display:flex;align-items:center;gap:10px;">'
+        f'<span style="width:8px;height:8px;border-radius:50%;display:inline-block;'
+        f'background:{freshness_color};box-shadow:0 0 5px {freshness_color};flex-shrink:0;"></span>'
+        f'<span style="font-size:12px;color:#64748b;">'
+        f'Pipeline last run <b style="color:#94a3b8;">{freshness_txt}</b> · '
+        f'Each cycle fetches fresh domains then runs the full 4-agent pipeline in batches of 10.'
+        f'</span></div>',
+        unsafe_allow_html=True,
     )
 
     if "monitor_job_id" not in st.session_state:
         st.session_state["monitor_job_id"] = None
 
-    col_start, col_poll = st.columns(2)
-    with col_start:
-        if st.button("▶️ Start Monitor Cycle", use_container_width=True, type="primary"):
+    btn_col, refresh_col = st.columns([1, 1])
+    with btn_col:
+        if st.button("▶ Start Monitor Cycle", width="stretch", type="primary"):
             try:
                 r = requests.post(f"{BACKEND_URL}/monitor/start", timeout=20)
                 if r.status_code == 200:
                     job_id = r.json().get("job_id", "")
                     st.session_state["monitor_job_id"] = job_id
-                    st.success(f"Monitor started — Job ID: `{job_id[:12]}…`")
                 else:
                     st.error(f"Failed to start: {r.text}")
             except Exception as e:
                 st.error(f"Connection error: {e}")
-    with col_poll:
-        if st.button("🔄 Check Job Status", use_container_width=True):
+    with refresh_col:
+        if st.button("↺ Refresh Status", width="stretch"):
             st.rerun()
 
     job_id = st.session_state.get("monitor_job_id")
     if job_id:
         job = api_get(f"/monitor/job/{job_id}")
         if job:
-            status = job.get("status", "unknown")
+            status   = job.get("status", "unknown")
+            short_id = f"{job_id[:8]}…"
             if status in ("queued", "running"):
-                st.warning(f"⏳ Job `{job_id[:12]}…` is **{status}**. Click 'Check Job Status' to refresh.")
+                st.markdown(
+                    f'<div class="evidence-card" style="border-left-color:#eab308;">'
+                    f'<span style="font-weight:600;color:#fbbf24;">⏳ Job {short_id} — {status.upper()}</span>'
+                    f'<div style="font-size:12px;color:#64748b;margin-top:4px;">Click Refresh Status to poll for completion.</div>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
             elif status == "completed":
-                st.success(f"✅ Job `{job_id[:12]}…` completed!")
-                s = job.get("summary", {})
-                mc1, mc2, mc3, mc4 = st.columns(4)
-                with mc1: st.metric("Reddit Domains",    s.get("reddit_count",      0))
-                with mc2: st.metric("WHOISDS Domains",   s.get("whoisds_count",     0))
-                with mc3: st.metric("Queued",             s.get("queued_unique",     0))
-                with mc4: st.metric("Synthetic Batches",  s.get("synthetic_batches", 0))
+                s     = job.get("summary", {})
+                _r    = s.get("reddit_count",      0)
+                _w    = s.get("whoisds_count",     0)
+                _q    = s.get("queued_unique",     0)
+                _sb   = s.get("synthetic_batches", 0)
+                _b    = s.get("batches",           0)
+                _rate = int(_sb / _b * 100) if _b > 0 else 0
+                _col  = "#ef4444" if _rate >= 50 else ("#f97316" if _rate > 0 else "#22c55e")
+                st.markdown(
+                    f'<div class="evidence-card evidence-low" style="border-left-color:#22c55e;">'
+                    f'<span style="font-weight:600;color:#4ade80;">✓ Job {short_id} completed</span>'
+                    f'<div style="display:flex;gap:24px;margin-top:10px;flex-wrap:wrap;">'
+                    f'<div><div style="font-size:10px;color:#475569;text-transform:uppercase;letter-spacing:1px;">Reddit</div>'
+                    f'<div style="font-size:1.2rem;font-weight:700;color:#f1f5f9;">{_r}</div></div>'
+                    f'<div><div style="font-size:10px;color:#475569;text-transform:uppercase;letter-spacing:1px;">WHOISDS</div>'
+                    f'<div style="font-size:1.2rem;font-weight:700;color:#f1f5f9;">{_w}</div></div>'
+                    f'<div><div style="font-size:10px;color:#475569;text-transform:uppercase;letter-spacing:1px;">Queued</div>'
+                    f'<div style="font-size:1.2rem;font-weight:700;color:#f1f5f9;">{_q}</div></div>'
+                    f'<div><div style="font-size:10px;color:#475569;text-transform:uppercase;letter-spacing:1px;">Threat Rate</div>'
+                    f'<div style="font-size:1.2rem;font-weight:700;color:{_col};">{_rate}%</div></div>'
+                    f'</div></div>',
+                    unsafe_allow_html=True,
+                )
             elif status == "failed":
-                st.error(f"❌ Job failed: {job.get('error', 'unknown')}")
+                st.markdown(
+                    f'<div class="evidence-card evidence-high">'
+                    f'<span style="font-weight:600;color:#f87171;">✗ Job {short_id} failed</span>'
+                    f'<div style="font-size:12px;color:#94a3b8;margin-top:4px;">{job.get("error","unknown error")}</div>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
                 tb = job.get("traceback")
                 if tb:
-                    with st.expander("Error details"):
+                    with st.expander("Error traceback"):
                         st.code(tb)
         else:
             st.info("Job status unavailable — backend may have restarted.")
-
-    st.divider()
-
-    with st.expander("ℹ️ How does the monitor work?"):
-        st.markdown("""
-        **Data Sources:**
-        - **Reddit** — Scans r/worldnews, r/conspiracy, r/politics, r/news for external domain links
-        - **WHOISDS** — Fetches newly registered domains with suspicious TLDs (.xyz, .top, .click, etc.)
-
-        **Pipeline:**
-        1. Domains from both feeds are merged and deduplicated
-        2. Up to 40 unique domains are queued per cycle
-        3. Domains are split into batches of 10
-        4. Each batch runs through the full 4-agent analysis pipeline
-        5. Results are logged to `data/monitor_runs.jsonl`
-
-        **Scheduling:**
-        - Manual: Click "Start Monitor Cycle" above
-        - Automatic: Run `python -m pipeline.schedule_monitor` (every 6 hours by default)
-        """)
 
     with st.expander("ℹ️ About This Project"):
         col1, col2 = st.columns(2)
