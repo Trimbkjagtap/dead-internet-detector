@@ -1131,26 +1131,42 @@ Be direct. Cite numbers. Do not hedge with "may" or "could" when the data is cle
             st.markdown("---")
             st.markdown("### 📄 Content Similarity Matches")
             st.caption(
-                f"These domain pairs have suspiciously similar homepage text (above {SIM_THRESHOLD} cosine similarity). "
-                "Read both excerpts and decide: is this copied content, or just coincidental topic overlap?"
+                f"Domain pairs with cosine similarity above {SIM_THRESHOLD}. "
+                "🔴 ≥0.85 = strong evidence of copied/templated content. "
+                "🟡 0.75–0.85 = worth investigating. "
+                "🔵 0.65–0.75 = likely topic or geographic overlap — read both excerpts before drawing conclusions."
             )
             if not evidence_pairs:
                 st.info("No content similarity matches found above the threshold for this domain.")
             else:
                 for ep in evidence_pairs:
                     sim_pct   = ep['similarity']
-                    ev_class  = "evidence-high" if sim_pct >= 0.70 else ("evidence-med" if sim_pct >= 0.50 else "evidence-low")
+                    # Calibrated tiers — ≥0.85 is strong signal, 0.65–0.84 is moderate
+                    if sim_pct >= 0.85:
+                        ev_class   = "evidence-high"
+                        ev_icon    = "🔴"
+                        ev_label   = "🔴 Very high — strong indicator of copied or templated content"
+                        ev_expand  = True
+                    elif sim_pct >= 0.75:
+                        ev_class   = "evidence-med"
+                        ev_icon    = "🟡"
+                        ev_label   = "🟡 Moderately high — possible coordination, verify content manually"
+                        ev_expand  = False
+                    else:
+                        ev_class   = "evidence-low"
+                        ev_icon    = "🔵"
+                        ev_label   = "🔵 Low-moderate — likely topic or geographic overlap, not coordination"
+                        ev_expand  = False
                     sim_label = f"{sim_pct:.0%}"
                     with st.expander(
-                        f"{'🔴' if sim_pct >= 0.70 else '🟡' if sim_pct >= 0.50 else '🔵'}  "
-                        f"**{ep['domain_a']}** ↔ **{ep['domain_b']}** — {sim_label} similar",
-                        expanded=(sim_pct >= 0.70),
+                        f"{ev_icon}  **{ep['domain_a']}** ↔ **{ep['domain_b']}** — {sim_label} similar",
+                        expanded=ev_expand,
                     ):
                         st.markdown(
                             f'<div class="evidence-card {ev_class}">'
                             f'Similarity score: <b>{ep["similarity"]:.4f}</b> &nbsp;·&nbsp; '
                             f'Threshold: {SIM_THRESHOLD} &nbsp;·&nbsp; '
-                            f'{"🔴 Very high — likely copied or templated content" if sim_pct >= 0.70 else "🟡 Moderately high — worth investigating"}'
+                            f'{ev_label}'
                             f'</div>',
                             unsafe_allow_html=True,
                         )

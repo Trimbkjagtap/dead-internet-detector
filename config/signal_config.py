@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 MODEL_NAME = os.getenv("MODEL_NAME", "all-MiniLM-L6-v2")
-SIM_THRESHOLD = float(os.getenv("SIM_THRESHOLD", "0.45"))
+SIM_THRESHOLD = float(os.getenv("SIM_THRESHOLD", "0.65"))
 SIM_EDGE_FLAG_THRESHOLD = float(os.getenv("SIM_EDGE_FLAG_THRESHOLD", str(SIM_THRESHOLD)))
 CADENCE_THRESHOLD = float(os.getenv("CADENCE_THRESHOLD", "-0.1"))
 CADENCE_CONTAMINATION_MIN = float(os.getenv("CADENCE_CONTAMINATION_MIN", "0.1"))
