@@ -37,6 +37,79 @@ NOISE_AUTHORS = {
     "admin", "editor", "contributor", "guest writer", "press release",
 }
 
+# ── Authority whitelist ───────────────────────────────────────────────────────
+# Known credible wire services and established outlets.
+# Similarity pairs involving these domains are DOWN-WEIGHTED unless secondary
+# signals (hosting overlap, suspicious authors) are also present.
+WIRE_SERVICES = {
+    "apnews.com", "ap.org",
+    "reuters.com",
+    "afp.com",
+    "bloomberg.com",
+    "bbc.com", "bbc.co.uk",
+    "npr.org",
+    "pbs.org",
+    "theguardian.com",
+    "nytimes.com",
+    "washingtonpost.com",
+    "wsj.com",
+    "economist.com",
+    "ft.com",
+    "cnn.com",
+    "nbcnews.com",
+    "cbsnews.com",
+    "abcnews.go.com",
+    "foxnews.com",
+    "usatoday.com",
+    "thehill.com",
+    "politico.com",
+    "axios.com",
+}
+
+# Established local/regional outlets — similarity among these is expected
+# (they all cover local news in similar language)
+ESTABLISHED_LOCAL_OUTLETS = {
+    "nbcboston.com", "wgbh.org", "wcvb.com", "wbur.org",   # Boston
+    "latimes.com", "laist.com",                              # LA
+    "chicagotribune.com", "wttw.com",                        # Chicago
+    "dallasnews.com", "kera.org",                            # Dallas
+    "chron.com", "houstonpublicmedia.org",                   # Houston
+    "ajc.com", "wabe.org",                                   # Atlanta
+    "sfchronicle.com", "kqed.org",                           # SF
+    "seattletimes.com", "kuow.org",                          # Seattle
+    "oregonlive.com", "opb.org",                             # Portland
+    "startribune.com", "mpr.org",                            # Minneapolis
+}
+
+# Combined authority set for quick membership check
+AUTHORITY_DOMAINS = WIRE_SERVICES | ESTABLISHED_LOCAL_OUTLETS
+
+# Similarity threshold multiplier when BOTH domains in a pair are authority domains.
+# A pair scoring 0.70 raw becomes 0.70 * 0.5 = 0.35 effective — below flag threshold.
+AUTHORITY_PAIR_WEIGHT = 0.50
+
+# When ONE domain is authority (mixed pair): less aggressive discount
+AUTHORITY_MIXED_WEIGHT = 0.75
+
+# Flag threshold multiplier for authority pairs.
+# The similarity signal only fires when effective_sim >= SIM_THRESHOLD * this multiplier.
+# For two authority domains: threshold is raised by 50% (e.g. 0.65 → 0.975).
+# This means wire-service pairs need near-identical raw scores before being flagged at all.
+AUTHORITY_PAIR_THRESHOLD_MULTIPLIER  = 1.50   # both authority → threshold × 1.5
+AUTHORITY_MIXED_THRESHOLD_MULTIPLIER = 1.20   # one authority  → threshold × 1.2
+
+# ── Syndication boilerplate patterns ─────────────────────────────────────────
+# Phrases that indicate shared wire-service content (NOT fake-network copying).
+# If a similarity pair's excerpts contain these, the flag is suppressed.
+SYNDICATION_MARKERS = [
+    "associated press", "ap —", "reuters —", "afp —",
+    "copyright ap", "copyright reuters",
+    "contributed to this report",
+    "wire service report",
+    "this story was originally published",
+    "republished with permission",
+]
+
 
 def bounded_contamination(sample_size: int) -> float:
     if sample_size <= 0:

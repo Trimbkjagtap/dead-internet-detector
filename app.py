@@ -903,7 +903,16 @@ with tab_analyze:
                         system_prompt = (
                             "You are a disinformation analyst with expertise in detecting coordinated inauthentic behavior, "
                             "working for a newsroom fact-checking desk. You are rigorous, evidence-based, and direct. "
-                            "You cite specific numbers when available. You distinguish between correlation and confirmed coordination."
+                            "You cite specific numbers when available. You distinguish between correlation and confirmed coordination.\n\n"
+                            "CRITICAL DISTINCTION — when evaluating Signal 1 (content similarity), you must explicitly "
+                            "assess which scenario applies:\n"
+                            "  • CLONED CONTENT (red flag): verbatim or near-verbatim article copying, identical HTML structure, "
+                            "same bylines with no attribution, coordinated posting times — strongly indicates a bot/content farm.\n"
+                            "  • SHARED JOURNALISTIC REPORTING (not a red flag): similar story framing because both sites "
+                            "cover the same region/topic, wire service attribution (AP, Reuters, AFP), different wording, "
+                            "established outlet context — this is EXPECTED and should NOT raise alarm.\n"
+                            "State which scenario the evidence supports and why. Never flag legitimate wire-service syndication "
+                            "as suspicious without additional corroborating signals."
                         )
 
                         user_prompt = f"""Investigate whether this domain cluster is a coordinated synthetic content network.
@@ -916,10 +925,11 @@ DOMAIN DATA (raw scores included):
 OVERALL CLUSTER VERDICT: {verdict}
 
 INSTRUCTIONS — Think step by step:
-1. For each triggered signal, state what the specific numbers mean and whether they are strong or weak evidence of coordination.
-2. State your overall assessment: does this look like a real independent news operation, a coordinated fake network, or ambiguous?
-3. List the two most suspicious specific findings with exact values.
-4. Recommend three concrete next steps for a journalist to verify or refute the verdict (e.g., WHOIS lookup, Shodan IP search, author LinkedIn check).
+1. For Signal 1 (content similarity), explicitly state: is this CLONED CONTENT (bot farm) or SHARED JOURNALISTIC REPORTING (wire service)? Explain with specific evidence.
+2. For each other triggered signal, state what the specific numbers mean and whether they are strong or weak evidence of coordination.
+3. State your overall assessment: does this look like a real independent news operation, a coordinated fake network, or ambiguous?
+4. List the two most suspicious specific findings with exact values (or state "none found" if the cluster appears organic).
+5. Recommend three concrete next steps for a journalist to verify or refute the verdict.
 
 Be direct. Cite numbers. Do not hedge with "may" or "could" when the data is clear."""
 
@@ -1028,7 +1038,14 @@ Be direct. Cite numbers. Do not hedge with "may" or "could" when the data is cle
                                       help="Does the publishing schedule look machine-generated or abnormal?")
                         with c3:
                             age = int(dv.get("domain_age_days") or -1)
-                            age_str = f"{age} days old" if age > 0 else "age unknown"
+                            age_src = dv.get("domain_age_source", "unknown")
+                            if age > 0:
+                                if age_src == "wayback_estimate":
+                                    age_str = f"≥{age} days (archive est.)"
+                                else:
+                                    age_str = f"{age} days old"
+                            else:
+                                age_str = "age unknown"
                             st.metric("3 · WHOIS Registration",
                                       "🚨 Triggered" if s3 else "✅ Clear",
                                       delta=age_str,
@@ -1164,12 +1181,47 @@ Be direct. Cite numbers. Do not hedge with "may" or "could" when the data is cle
                     ):
                         st.markdown(
                             f'<div class="evidence-card {ev_class}">'
-                            f'Similarity score: <b>{ep["similarity"]:.4f}</b> &nbsp;·&nbsp; '
-                            f'Threshold: {SIM_THRESHOLD} &nbsp;·&nbsp; '
-                            f'{ev_label}'
+                            f'Similarity score: <b>{ep["similarity"]:.4f}</b>'
+                            + (f' &nbsp;·&nbsp; Raw: <b>{ep["raw_similarity"]:.4f}</b>' if ep.get("raw_similarity") and ep.get("raw_similarity") != ep.get("similarity") else '')
+                            + f' &nbsp;·&nbsp; Threshold: {SIM_THRESHOLD} &nbsp;·&nbsp; {ev_label}'
                             f'</div>',
                             unsafe_allow_html=True,
                         )
+                        # Authority / syndication / cloning classification badges
+                        _badge_parts = []
+                        _sim_type = ep.get("similarity_type", "unknown")
+
+                        if ep.get("syndicated") or _sim_type == "shared_journalistic":
+                            _badge_parts.append(
+                                '<span style="background:#1a5c38;color:#7fff9a;padding:3px 10px;border-radius:12px;'
+                                'font-size:0.78em;font-weight:600;margin-right:6px;">'
+                                '✅ Shared Journalistic Reporting — unique bylines / wire-service syndication</span>'
+                            )
+                        elif _sim_type == "structural_clone":
+                            _badge_parts.append(
+                                '<span style="background:#5c1a1a;color:#ffb3b3;padding:3px 10px;border-radius:12px;'
+                                'font-size:0.78em;font-weight:600;margin-right:6px;">'
+                                '⚠️ Structural Clone — near-identical body text AND shared author bylines</span>'
+                            )
+                        elif _sim_type == "topic_overlap":
+                            _badge_parts.append(
+                                '<span style="background:#2a2a3a;color:#b0b0cc;padding:3px 10px;border-radius:12px;'
+                                'font-size:0.78em;font-weight:600;margin-right:6px;">'
+                                '🔵 Topic Overlap — similar subject matter only, no structural indicators</span>'
+                            )
+
+                        if ep.get("authority_discounted") and _sim_type != "shared_journalistic":
+                            _badge_parts.append(
+                                '<span style="background:#1a3a5c;color:#7fc3ff;padding:3px 10px;border-radius:12px;'
+                                'font-size:0.78em;font-weight:600;margin-right:6px;">'
+                                '🏛️ Authority Domain — similarity threshold raised 20–50%</span>'
+                            )
+
+                        if _badge_parts:
+                            st.markdown(
+                                '<div style="margin:6px 0 10px 0;">' + "".join(_badge_parts) + '</div>',
+                                unsafe_allow_html=True,
+                            )
                         col_a, col_b = st.columns(2)
                         with col_a:
                             st.markdown(f"**{ep['domain_a']}**")
@@ -1216,8 +1268,14 @@ Be direct. Cite numbers. Do not hedge with "may" or "could" when the data is cle
                                                         "coordinated inauthentic media. Given two website excerpts "
                                                         "and their similarity score, identify: (1) which specific "
                                                         "phrases, topics, or framings are shared; (2) whether this "
-                                                        "looks like directly copied content, paraphrasing, or mere "
-                                                        "topic coincidence. Be specific and cite text."
+                                                        "looks like CLONED CONTENT (verbatim copying, same bylines, "
+                                                        "no attribution — indicates bot/content farm) or "
+                                                        "SHARED JOURNALISTIC REPORTING (wire service attribution, "
+                                                        "different wording, covering the same regional story — "
+                                                        "this is NORMAL and NOT suspicious). "
+                                                        "State your conclusion clearly with the label "
+                                                        "CLONED CONTENT or SHARED JOURNALISTIC REPORTING, "
+                                                        "then explain with specific text citations."
                                                     )},
                                                     {"role": "user", "content": (
                                                         f"Similarity score: {_sim_score:.3f} (threshold: {SIM_THRESHOLD})\n\n"

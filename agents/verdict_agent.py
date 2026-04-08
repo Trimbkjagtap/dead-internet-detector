@@ -226,13 +226,22 @@ def generate_explanation(domain: str, feats: dict) -> str:
         "You are a forensic analyst explaining disinformation detection results to an investigative journalist. "
         "For each triggered signal, write exactly one clear sentence stating what the specific numbers mean "
         "and why they are suspicious. Use the actual values. Never hedge with 'may' or 'could' — "
-        "say what the data shows. Be concise."
+        "say what the data shows. Be concise.\n\n"
+        "IMPORTANT — when Signal 1 (Content Similarity) is triggered, you MUST explicitly distinguish "
+        "between two scenarios:\n"
+        "  A) CLONED CONTENT (bot network): near-identical HTML structure, same article text verbatim, "
+        "same bylines, no attribution — indicates coordinated content farming.\n"
+        "  B) SHARED JOURNALISTIC REPORTING (wire service): similar story framing, different wording, "
+        "AP/Reuters attribution, legitimate local outlet context — this is expected and NOT suspicious.\n"
+        "State which scenario the similarity score and context suggests, and why."
     )
     user_prompt = (
         f"Domain: {domain}\n"
         f"Verdict: {verdict_tier}\n\n"
         f"Triggered signals ({signals}/{7}):\n{signal_block}\n\n"
         f"Write a numbered list — one sentence per triggered signal explaining what it means. "
+        f"For Signal 1 (if present), explicitly state whether this looks like CLONED CONTENT or "
+        f"SHARED JOURNALISTIC REPORTING based on the similarity score and any available context. "
         f"End with one sentence summarising the overall risk tier."
     )
 
@@ -419,12 +428,20 @@ def produce_verdict(features: dict, sim_edges: dict, excerpts: dict = None) -> d
 
             confidence = compute_confidence(feats, syn_prob)
 
-            # Verdict — 3-of-7 rule
+            # ── Strict 3-of-7 enforcement ─────────────────────────────────────
+            # A single signal (1/7) is NEVER enough to flag a domain as Suspicious
+            # or High Risk. A lone signal could always be explained by legitimate
+            # journalism, geographic co-coverage, or generic CDN usage.
+            # Any domain with signals == 1 is automatically ORGANIC.
+            # REVIEW requires 2 signals; SYNTHETIC requires 3+.
+
+            # Verdict
             if signals >= 3:
                 verdict = 'SYNTHETIC'
-            elif signals >= 1:
+            elif signals == 2:
                 verdict = 'REVIEW'
             else:
+                # 0 or 1 signal → ORGANIC
                 verdict = 'ORGANIC'
                 sim_boost_org     = min(float(feats.get('max_similarity', 0)) * 0.20, 0.20)
                 cadence_boost_org = min(float(feats.get('burst_score', 0)) * 0.15, 0.10)
@@ -432,6 +449,26 @@ def produce_verdict(features: dict, sim_edges: dict, excerpts: dict = None) -> d
                 confidence = round(max(0.70, min(1.0 - (sim_boost_org + cadence_boost_org + gnn_boost_org), 0.97)), 2)
 
             explanation = generate_explanation(domain, feats)
+
+            # When exactly 1 signal fired, append a clear "single-signal" disclaimer
+            if signals == 1:
+                fired_name = (
+                    "content similarity"    if feats.get('similarity_flag') else
+                    "cadence anomaly"       if feats.get('cadence_flagged') else
+                    "WHOIS age"             if feats.get('whois_flagged') else
+                    "shared hosting"        if feats.get('hosting_flagged') else
+                    "insular link network"  if feats.get('link_network_flagged') else
+                    "Wayback history"       if feats.get('wayback_flagged') else
+                    "shared author bylines" if feats.get('author_overlap_flagged') else
+                    "unknown signal"
+                )
+                explanation = (
+                    f"{domain} — {fired_name} signal fired (1/7), but no other signals "
+                    f"corroborate it. The 3-of-7 convergence rule requires at least 2 independent "
+                    f"signals before flagging a domain as Suspicious. A single signal may reflect "
+                    f"legitimate syndication, regional topic overlap, or common hosting. "
+                    f"Verdict: Looks Legitimate."
+                )
 
             # Day 4: GPT confidence calibration check (skip clean ORGANIC to save cost)
             gpt_review = ""
@@ -471,6 +508,7 @@ def produce_verdict(features: dict, sim_edges: dict, excerpts: dict = None) -> d
                 'max_similarity':        float(feats.get('max_similarity', 0)),
                 'burst_score':           float(feats.get('burst_score', 0)),
                 'domain_age_days':       int(feats.get('domain_age_days', -1)),
+                'domain_age_source':     str(feats.get('domain_age_source', 'unknown')),
                 'ip_address':            str(feats.get('ip_address', '')),
                 'hosting_org':           str(feats.get('hosting_org', '')),
                 'insular_score':         float(feats.get('insular_score', 0)),

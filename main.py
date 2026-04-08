@@ -214,6 +214,7 @@ def _heuristic_preliminary_verdict(domain: str) -> Dict:
                 "max_similarity":      0.0,
                 "burst_score":         0.0,
                 "domain_age_days":     int(whois_features.get("domain_age_days", -1)),
+                "domain_age_source":   str(whois_features.get("domain_age_source", "unknown")),
                 "ip_address":          "",
                 "hosting_org":         "",
                 "insular_score":       0.0,

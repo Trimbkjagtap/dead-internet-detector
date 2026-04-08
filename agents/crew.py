@@ -126,12 +126,29 @@ def run_analysis(seed_domains: list) -> dict:
             a, b = key
         else:
             continue
+        # score may be a float (legacy) or a dict with raw/effective/metadata
+        if isinstance(score, dict):
+            display_sim          = score.get('effective', score.get('score', 0))
+            raw_sim              = score.get('score', display_sim)
+            authority_discounted = score.get('authority_discounted', False)
+            syndicated           = score.get('syndicated', False)
+            similarity_type      = score.get('similarity_type', 'unknown')
+        else:
+            display_sim          = float(score)
+            raw_sim              = display_sim
+            authority_discounted = False
+            syndicated           = False
+            similarity_type      = 'unknown'
         evidence_pairs.append({
-            'domain_a':   a,
-            'domain_b':   b,
-            'similarity': round(float(score), 4),
-            'excerpt_a':  excerpts.get(a, ''),
-            'excerpt_b':  excerpts.get(b, ''),
+            'domain_a':             a,
+            'domain_b':             b,
+            'similarity':           round(float(display_sim), 4),
+            'raw_similarity':       round(float(raw_sim), 4),
+            'authority_discounted': authority_discounted,
+            'syndicated':           syndicated,
+            'similarity_type':      similarity_type,
+            'excerpt_a':            excerpts.get(a, ''),
+            'excerpt_b':            excerpts.get(b, ''),
         })
     evidence_pairs.sort(key=lambda x: x['similarity'], reverse=True)
 

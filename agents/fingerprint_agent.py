@@ -19,6 +19,12 @@ from config.signal_config import (
     MIN_DOMAINS_FOR_INSULAR,
     WAYBACK_MIN_SNAPSHOTS,
     WAYBACK_SPIKE_RATIO,
+    AUTHORITY_DOMAINS,
+    AUTHORITY_PAIR_WEIGHT,
+    AUTHORITY_MIXED_WEIGHT,
+    AUTHORITY_PAIR_THRESHOLD_MULTIPLIER,
+    AUTHORITY_MIXED_THRESHOLD_MULTIPLIER,
+    SYNDICATION_MARKERS,
 )
 from services.whois_service import WhoisService
 from services.enrichment_service import resolve_ip_and_asn, get_wayback_data
@@ -55,6 +61,58 @@ def is_same_site(domain_a: str, domain_b: str) -> bool:
     e.g. twitter.com and x.com are different sites (handled by redirect detection).
     """
     return get_parent_domain(domain_a) == get_parent_domain(domain_b)
+
+
+def _classify_similarity(
+    raw_sim: float,
+    authors_a: list,
+    authors_b: list,
+    text_a: str,
+    text_b: str,
+) -> str:
+    """
+    Classify a content similarity pair as one of:
+      'structural_clone'         — identical boilerplate/nav + body, strong cloning signal
+      'shared_journalistic'      — similar body text but unique bylines and structure
+      'topic_overlap'            — moderate sim, no shared elements beyond topic
+
+    Logic (requirement 3):
+    - If both domains have non-empty, completely disjoint author sets → NOT a structural
+      clone (real personas differ across independent outlets).
+    - If sim >= 0.90 (near-verbatim) AND authors overlap → structural_clone.
+    - If sim >= 0.75 but authors are disjoint → shared_journalistic (wire service pattern).
+    - Otherwise → topic_overlap.
+    """
+    # Normalise author sets (lowercase, strip)
+    set_a = {a.lower().strip() for a in authors_a if a.strip()}
+    set_b = {b.lower().strip() for b in authors_b if b.strip()}
+    authors_overlap = bool(set_a & set_b) if (set_a and set_b) else None  # None = unknown
+
+    # Near-verbatim body text with shared authors → structural clone
+    if raw_sim >= 0.90 and authors_overlap:
+        return 'structural_clone'
+
+    # High-sim but completely different bylines → wire-service syndication
+    if raw_sim >= 0.75 and authors_overlap is False:
+        return 'shared_journalistic'
+
+    # High-sim, author data unknown (one/both had no bylines captured)
+    # Check for boilerplate nav phrases duplicated across texts as a proxy
+    _NAV_PHRASES = [
+        "home", "about us", "contact", "privacy policy", "terms of service",
+        "subscribe", "newsletter", "advertise", "cookies",
+    ]
+    text_a_l = text_a.lower()[:600]
+    text_b_l = text_b.lower()[:600]
+    nav_matches = sum(1 for p in _NAV_PHRASES if p in text_a_l and p in text_b_l)
+    # Many nav phrases in common (≥5) at 80%+ sim → likely templated clone
+    if raw_sim >= 0.80 and nav_matches >= 5:
+        return 'structural_clone'
+
+    if raw_sim >= 0.65:
+        return 'shared_journalistic'
+
+    return 'topic_overlap'
 
 
 def _load_corpus() -> list:
@@ -131,13 +189,30 @@ def _compute_signal1_against_corpus(domains_data: list) -> dict:
     edges = {}
     flagged_pairs = []
     for j in range(1, len(all_domains)):
-        sim = float(sim_matrix[0][j])
-        if sim >= SIM_THRESHOLD:
-            pair_key = "|||".join(sorted([seed_domain, all_domains[j]]))
+        raw_sim = float(sim_matrix[0][j])
+        corpus_domain = all_domains[j]
+        d_auth = seed_domain in AUTHORITY_DOMAINS
+        c_auth = corpus_domain in AUTHORITY_DOMAINS
+        if d_auth and c_auth:
+            effective_sim  = raw_sim * AUTHORITY_PAIR_WEIGHT
+            pair_threshold = SIM_THRESHOLD * AUTHORITY_PAIR_THRESHOLD_MULTIPLIER
+        elif d_auth or c_auth:
+            effective_sim  = raw_sim * AUTHORITY_MIXED_WEIGHT
+            pair_threshold = SIM_THRESHOLD * AUTHORITY_MIXED_THRESHOLD_MULTIPLIER
+        else:
+            effective_sim  = raw_sim
+            pair_threshold = SIM_THRESHOLD
+        if effective_sim >= pair_threshold:
+            pair_key = "|||".join(sorted([seed_domain, corpus_domain]))
             if pair_key not in edges:
-                edges[pair_key] = round(sim, 4)
-                excerpts[all_domains[j]] = corpus[j - 1]['text'][:400].strip()
-                flagged_pairs.append((all_domains[j], sim))
+                edges[pair_key] = {
+                    'score':               round(raw_sim, 4),
+                    'effective':           round(effective_sim, 4),
+                    'authority_discounted': (d_auth or c_auth),
+                    'syndicated':          False,
+                }
+                excerpts[corpus_domain] = corpus[j - 1]['text'][:400].strip()
+                flagged_pairs.append((corpus_domain, effective_sim))
 
     max_sim = max((float(sim_matrix[0][j]) for j in range(1, len(all_domains))), default=0.0)
     avg_sim = float(np.mean([float(sim_matrix[0][j]) for j in range(1, len(all_domains))]))
@@ -172,6 +247,8 @@ def compute_signal1_similarity(domains_data: list) -> dict:
     model   = get_model()
     texts   = [d.get('text', '')[:1000] for d in domains_data]
     domains = [d['domain'] for d in domains_data]
+    # author lists per domain for syndication classification
+    authors_by_domain = {d['domain']: d.get('article_authors', []) for d in domains_data}
 
     # Compute embeddings
     embeddings = model.encode(texts, show_progress_bar=False)
@@ -197,23 +274,71 @@ def compute_signal1_similarity(domains_data: list) -> dict:
             if is_same_site(domains[i], domains[j]):
                 continue
 
-            sim = float(sim_matrix[i][j])
-            similarities.append(sim)
+            raw_sim = float(sim_matrix[i][j])
 
-            if sim >= SIM_THRESHOLD:
+            # ── Authority weighting + elevated threshold (Requirement 1) ──────
+            # Wire services publish near-identical content by design — that is
+            # syndication, not coordination. Two protections apply:
+            #   (a) effective_sim is discounted (display/scoring weight)
+            #   (b) the flag threshold itself is raised 20–50% so the signal
+            #       is far harder to trigger for known credible outlets.
+            d_i_auth = domains[i] in AUTHORITY_DOMAINS
+            d_j_auth = domains[j] in AUTHORITY_DOMAINS
+            if d_i_auth and d_j_auth:
+                effective_sim    = raw_sim * AUTHORITY_PAIR_WEIGHT
+                pair_threshold   = SIM_THRESHOLD * AUTHORITY_PAIR_THRESHOLD_MULTIPLIER
+            elif d_i_auth or d_j_auth:
+                effective_sim    = raw_sim * AUTHORITY_MIXED_WEIGHT
+                pair_threshold   = SIM_THRESHOLD * AUTHORITY_MIXED_THRESHOLD_MULTIPLIER
+            else:
+                effective_sim    = raw_sim
+                pair_threshold   = SIM_THRESHOLD
+
+            # ── Syndication marker suppression ───────────────────────────────
+            # Explicit wire-service attribution in the text suppresses the pair
+            # entirely — score is zeroed regardless of numeric similarity.
+            exc_i = excerpts.get(domains[i], '').lower()
+            exc_j = excerpts.get(domains[j], '').lower()
+            is_syndicated = any(
+                marker in exc_i or marker in exc_j
+                for marker in SYNDICATION_MARKERS
+            )
+            if is_syndicated:
+                effective_sim = 0.0  # suppress entirely
+
+            similarities.append(effective_sim)
+
+            if effective_sim >= pair_threshold:
                 pair_key = "|||".join(sorted([domains[i], domains[j]]))
                 if pair_key not in edges:
-                    edges[pair_key] = round(sim, 4)
-                flagged_pairs.append((domains[j], sim))
+                    sim_type = _classify_similarity(
+                        raw_sim,
+                        authors_by_domain.get(domains[i], []),
+                        authors_by_domain.get(domains[j], []),
+                        texts[i],
+                        texts[j],
+                    )
+                    # Syndication marker text overrides classification
+                    if is_syndicated:
+                        sim_type = 'shared_journalistic'
+                    edges[pair_key] = {
+                        'score':               round(raw_sim, 4),
+                        'effective':           round(effective_sim, 4),
+                        'authority_discounted': (d_i_auth or d_j_auth),
+                        'syndicated':          is_syndicated,
+                        'similarity_type':     sim_type,
+                    }
+                flagged_pairs.append((domains[j], effective_sim))
 
         avg_sim = float(np.mean(similarities)) if similarities else 0.0
         max_sim = float(max(similarities)) if similarities else 0.0
 
         domain_scores[domains[i]] = {
-            'avg_similarity':      round(avg_sim, 4),
-            'max_similarity':      round(max_sim, 4),
-            'similarity_flag':     1 if max_sim >= SIM_THRESHOLD else 0,
-            'similar_domain_count': len(flagged_pairs),
+            'avg_similarity':        round(avg_sim, 4),
+            'max_similarity':        round(max_sim, 4),
+            'similarity_flag':       1 if max_sim >= SIM_THRESHOLD else 0,
+            'similar_domain_count':  len(flagged_pairs),
+            'is_authority_domain':   1 if domains[i] in AUTHORITY_DOMAINS else 0,
         }
 
     flagged = sum(1 for v in domain_scores.values() if v['similarity_flag'] == 1)
@@ -315,9 +440,18 @@ _CDN_ASNS = {"AS13335", "AS54113", "AS16509", "AS15169", "AS20940", "AS209242", 
 from config.signal_config import NOISE_AUTHORS as _NOISE_AUTHORS
 
 
-def compute_signal4_hosting(domains_data: list) -> dict:
-    """Signal 4: IP address and ASN/hosting overlap between domains."""
+def compute_signal4_hosting(domains_data: list, whois_data: dict = None) -> dict:
+    """
+    Signal 4: IP address and ASN/hosting overlap between domains.
+
+    False-positive guard for major CDN providers (AWS, Google, Cloudflare, Akamai):
+    If the shared IP/ASN belongs to a large generic hosting provider, the pair is
+    only flagged when BOTH domains were registered on the same calendar day via the
+    same registrar — a near-impossible coincidence for legitimate independent outlets.
+    """
     print("  🌐 Computing Signal 4 (hosting overlap)...")
+
+    whois_data = whois_data or {}
 
     live_domains = [d for d in domains_data if d.get('status') == 'ok']
     if len(live_domains) < 2:
@@ -330,8 +464,8 @@ def compute_signal4_hosting(domains_data: list) -> dict:
             }
         return {'domain_scores': result, 'host_edges': {}}
 
-    ip_info    = {}
-    ip_to_doms = {}
+    ip_info     = {}
+    ip_to_doms  = {}
     asn_to_doms = {}
 
     for d in live_domains:
@@ -347,6 +481,22 @@ def compute_signal4_hosting(domains_data: list) -> dict:
 
     result     = {}
     host_edges = {}
+
+    def _same_day_same_registrar(dom_a: str, dom_b: str) -> bool:
+        """Return True only if both domains share creation date (day) AND registrar."""
+        w_a = whois_data.get(dom_a, {})
+        w_b = whois_data.get(dom_b, {})
+        date_a = w_a.get('created_date', '')
+        date_b = w_b.get('created_date', '')
+        reg_a  = w_a.get('registrar', '').lower().strip()
+        reg_b  = w_b.get('registrar', '').lower().strip()
+        if not date_a or not date_b:
+            return False  # unknown dates → don't flag CDN pairs
+        if date_a[:10] != date_b[:10]:
+            return False
+        if not reg_a or not reg_b or reg_a == 'unknown' or reg_b == 'unknown':
+            return False
+        return reg_a == reg_b
 
     for d in domains_data:
         domain = d['domain']
@@ -366,28 +516,40 @@ def compute_signal4_hosting(domains_data: list) -> dict:
         shared_ip  = [x for x in ip_to_doms.get(ip, [])  if x != domain]
         shared_asn = [x for x in asn_to_doms.get(asn, []) if x != domain]
 
-        flagged = 1 if (shared_ip or shared_asn) and not is_cdn else 0
+        # For CDN-hosted domains: require same-day + same-registrar as corroboration.
+        # For non-CDN shared IPs: flag as before (exact IP match is suspicious regardless).
+        if is_cdn:
+            # CDN shared-IP: only flag if same-day/same-registrar confirmed
+            cdn_confirmed_ip  = [x for x in shared_ip  if _same_day_same_registrar(domain, x)]
+            cdn_confirmed_asn = [x for x in shared_asn if _same_day_same_registrar(domain, x)]
+            flagged = 1 if (cdn_confirmed_ip or cdn_confirmed_asn) else 0
+            flagging_ip  = cdn_confirmed_ip
+            flagging_asn = cdn_confirmed_asn
+        else:
+            flagged      = 1 if (shared_ip or shared_asn) else 0
+            flagging_ip  = shared_ip
+            flagging_asn = shared_asn
 
-        for other in shared_ip:
+        for other in flagging_ip:
             key = "|||".join(sorted([domain, other]))
             host_edges[key] = "SAME_IP"
-        for other in shared_asn:
+        for other in flagging_asn:
             key = "|||".join(sorted([domain, other]))
             if key not in host_edges:
                 host_edges[key] = "SAME_ASN"
 
         result[domain] = {
-            'ip_address':       ip,
-            'asn':              asn,
-            'hosting_org':      info.get('hosting_org', ''),
-            'hosting_flagged':  flagged,
+            'ip_address':         ip,
+            'asn':                asn,
+            'hosting_org':        info.get('hosting_org', ''),
+            'hosting_flagged':    flagged,
             'shared_ip_domains':  shared_ip,
             'shared_asn_domains': shared_asn,
-            'is_cdn':           is_cdn,
+            'is_cdn':             is_cdn,
         }
 
     flagged_count = sum(1 for v in result.values() if v['hosting_flagged'])
-    print(f"  ✅ Signal 4: {flagged_count} domains share hosting, {len(host_edges)} host edges")
+    print(f"  ✅ Signal 4: {flagged_count} domains flagged for hosting overlap, {len(host_edges)} host edges")
     return {'domain_scores': result, 'host_edges': host_edges}
 
 
@@ -546,7 +708,8 @@ def analyze_domains(domains_data: list) -> dict:
     sig1 = compute_signal1_similarity(domains_data)
     sig2 = compute_signal2_cadence(domains_data)
     sig3 = compute_signal3_whois(domains_data)
-    sig4 = compute_signal4_hosting(domains_data)
+    # Pass WHOIS data to Signal 4 so it can gate CDN pairs on same-day/same-registrar
+    sig4 = compute_signal4_hosting(domains_data, whois_data=sig3)
     sig5 = compute_signal5_link_network(domains_data)
     sig6 = compute_signal6_wayback(domains_data)
     sig7 = compute_signal7_authors(domains_data)
@@ -577,6 +740,13 @@ def analyze_domains(domains_data: list) -> dict:
             wayback_flagged + author_overlap_flagged
         )
 
+        # Signal 3 age fallback: if WHOIS returned -1 (unknown), use Wayback first-seen
+        # as a lower-bound age estimate. This prevents established domains from showing "-1d".
+        whois_age = int(s3.get('domain_age_days', -1))
+        wb_age    = int(s6.get('wayback_age_days', -1))
+        effective_age      = whois_age if whois_age >= 0 else wb_age
+        age_source         = 'whois' if whois_age >= 0 else ('wayback_estimate' if wb_age >= 0 else 'unknown')
+
         features[domain] = {
             # Signal 1
             'avg_similarity':   s1.get('avg_similarity', 0.0),
@@ -588,7 +758,8 @@ def analyze_domains(domains_data: list) -> dict:
             'burst_score':      s2.get('burst_score', 0.0),
             'hour_variance':    0.0,
             # Signal 3
-            'domain_age_days':  s3.get('domain_age_days', -1),
+            'domain_age_days':  effective_age,
+            'domain_age_source': age_source,
             'registrar':        s3.get('registrar', 'unknown'),
             'whois_flagged':    whois_flagged,
             # Signal 4

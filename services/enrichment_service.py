@@ -31,6 +31,15 @@ _CDN_IP_PREFIXES = (
     "1.1.1.", "1.0.0.",
 )
 
+# Org name fragments — if ipinfo ASN lookup fails but org name is returned,
+# match against these to still detect large generic hosting providers.
+# Enterprise news orgs routinely use all of these; shared hosting is NOT suspicious.
+_CDN_ORG_KEYWORDS = {
+    "cloudflare", "fastly", "amazon", "google", "akamai", "microsoft",
+    "azure", "aws", "digitalocean", "linode", "vultr", "rackspace",
+    "leaseweb", "ovh", "hetzner", "sucuri", "incapsula",
+}
+
 
 def _load_cache() -> dict:
     if os.path.exists(CACHE_FILE):
@@ -114,10 +123,12 @@ def resolve_ip_and_asn(domain: str, token: str = "") -> dict:
     except Exception as e:
         result["error"] = f"ipinfo failed: {e}"
 
-    # Step 3: flag CDN
+    # Step 3: flag CDN — check ASN, IP prefix, and org name (handles rate-limited ASN lookups)
+    org_lower = result.get("hosting_org", "").lower()
     result["is_cdn"] = (
         result["asn"] in _CDN_ASNS
         or any(ip.startswith(p) for p in _CDN_IP_PREFIXES)
+        or any(kw in org_lower for kw in _CDN_ORG_KEYWORDS)
     )
 
     cache.setdefault("ip_asn", {})[domain] = result
