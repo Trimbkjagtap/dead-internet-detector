@@ -1067,6 +1067,26 @@ Be direct. Cite numbers. Do not hedge with "may" or "could" when the data is cle
                         else:
                             st.info(f"💬 {dv.get('explanation', 'No explanation available')}")
 
+                        # Day 4: GPT confidence review badge
+                        gpt_review = dv.get('gpt_confidence_review', '')
+                        if gpt_review:
+                            _rv = gpt_review.upper()
+                            if _rv.startswith('CHALLENGE'):
+                                _pill_color = "rgba(234,179,8,0.15)"; _pill_border = "rgba(234,179,8,0.45)"; _pill_text = "#fde047"
+                            elif _rv.startswith('AGREE'):
+                                _pill_color = "rgba(34,197,94,0.10)"; _pill_border = "rgba(34,197,94,0.35)"; _pill_text = "#86efac"
+                            else:
+                                _pill_color = "rgba(148,163,184,0.10)"; _pill_border = "rgba(148,163,184,0.30)"; _pill_text = "#94a3b8"
+                            st.markdown(
+                                f'<div style="margin-top:10px;padding:10px 14px;border-radius:9px;'
+                                f'background:{_pill_color};border:1px solid {_pill_border};">'
+                                f'<span style="font-size:10px;font-weight:700;letter-spacing:1.2px;'
+                                f'text-transform:uppercase;color:{_pill_text};">GPT Calibration Review</span>'
+                                f'<div style="font-size:13px;color:#cbd5e1;margin-top:5px;">{gpt_review}</div>'
+                                f'</div>',
+                                unsafe_allow_html=True,
+                            )
+
         # ══════════════════════════════════════════════
         # SUB-TAB 5 — EVIDENCE
         # ══════════════════════════════════════════════

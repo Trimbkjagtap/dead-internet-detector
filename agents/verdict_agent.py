@@ -114,8 +114,8 @@ def compute_confidence(feats: dict, syn_prob: float) -> float:
     )
 
 
-def generate_explanation(domain: str, feats: dict) -> str:
-    """Generate plain-English explanation for the verdict."""
+def _generate_explanation_template(domain: str, feats: dict) -> str:
+    """Fallback template-based explanation (used when OpenAI is unavailable)."""
     reasons = []
 
     if feats.get('similarity_flag', 0):
@@ -124,17 +124,13 @@ def generate_explanation(domain: str, feats: dict) -> str:
             f"(similarity {feats.get('max_similarity',0):.2f})"
         )
     if feats.get('cadence_flagged', 0):
-        reasons.append(
-            f"anomalous publishing time pattern detected"
-        )
+        reasons.append("anomalous publishing time pattern detected")
     if feats.get('whois_flagged', 0):
         reasons.append("suspicious domain registration pattern")
     if feats.get('hosting_flagged', 0):
-        reasons.append(
-            f"shares hosting infrastructure with other analyzed domains"
-        )
+        reasons.append("shares hosting infrastructure with other analyzed domains")
     if feats.get('link_network_flagged', 0):
-        mutual = int(feats.get('mutual_link_count', 0))
+        mutual  = int(feats.get('mutual_link_count', 0))
         insular = float(feats.get('insular_score', 0))
         if mutual > 0:
             reasons.append(f"mutually links with {mutual} other domain(s) in the cluster")
@@ -150,7 +146,6 @@ def generate_explanation(domain: str, feats: dict) -> str:
             reasons.append(f"archive spike: {recent} of {count} snapshots are from the last 30 days")
     if feats.get('author_overlap_flagged', 0):
         try:
-            import json
             shared = json.loads(feats.get('shared_authors', '[]'))
         except Exception:
             shared = []
@@ -158,13 +153,11 @@ def generate_explanation(domain: str, feats: dict) -> str:
         reasons.append(f"author name(s) {names} appear across multiple domains")
 
     signals = feats.get('signals_triggered', 0)
-
     if not reasons:
         return (
             f"{domain} passed all 7 checks — no suspicious patterns detected. "
             f"Content, hosting, link structure, archive history, and registration data all appear organic."
         )
-
     return (
         f"{domain} triggered {signals}/7 signals: "
         + "; ".join(reasons) + ". "
@@ -172,6 +165,144 @@ def generate_explanation(domain: str, feats: dict) -> str:
            if signals >= 3 else
            f"{signals} signal(s) detected — flagged for human review. Not enough to confirm a fake network alone.")
     )
+
+
+def generate_explanation(domain: str, feats: dict) -> str:
+    """
+    Generate plain-English explanation for the verdict.
+    Uses GPT-4o-mini when OPENAI_API_KEY is set and signals > 0.
+    Falls back to template strings gracefully if GPT is unavailable.
+    """
+    signals = int(feats.get('signals_triggered', 0))
+    if signals == 0:
+        return _generate_explanation_template(domain, feats)
+
+    api_key = os.getenv("OPENAI_API_KEY", "")
+    if not api_key:
+        return _generate_explanation_template(domain, feats)
+
+    # Build a compact signal summary with only triggered signals + their raw scores
+    triggered_lines = []
+    if feats.get('similarity_flag', 0):
+        triggered_lines.append(
+            f"Signal 1 (Content Similarity): TRIGGERED — max cosine similarity = {feats.get('max_similarity',0):.3f}"
+        )
+    if feats.get('cadence_flagged', 0):
+        triggered_lines.append(
+            f"Signal 2 (Cadence Anomaly): TRIGGERED — burst_score = {feats.get('burst_score',0):.3f}"
+        )
+    if feats.get('whois_flagged', 0):
+        triggered_lines.append(
+            f"Signal 3 (WHOIS Age): TRIGGERED — domain_age = {feats.get('domain_age_days','?')} days"
+        )
+    if feats.get('hosting_flagged', 0):
+        triggered_lines.append(
+            f"Signal 4 (Shared Hosting): TRIGGERED — hosting_org = {feats.get('hosting_org','?')}, "
+            f"ip = {feats.get('ip_address','?')}"
+        )
+    if feats.get('link_network_flagged', 0):
+        triggered_lines.append(
+            f"Signal 5 (Link Network): TRIGGERED — insular_score = {feats.get('insular_score',0):.2f}, "
+            f"mutual_links = {feats.get('mutual_link_count',0)}"
+        )
+    if feats.get('wayback_flagged', 0):
+        triggered_lines.append(
+            f"Signal 6 (Wayback History): TRIGGERED — snapshots = {feats.get('wayback_snapshot_count',0)}, "
+            f"reason = {feats.get('wayback_flag_reason','?')}"
+        )
+    if feats.get('author_overlap_flagged', 0):
+        triggered_lines.append(
+            f"Signal 7 (Author Overlap): TRIGGERED — shared_authors = {feats.get('shared_authors','[]')}"
+        )
+
+    signal_block = "\n".join(triggered_lines)
+    verdict_tier = (
+        "SYNTHETIC (3+ signals — classified as coordinated fake network)"
+        if signals >= 3 else
+        "REVIEW (1-2 signals — flagged for human investigation)"
+    )
+
+    system_prompt = (
+        "You are a forensic analyst explaining disinformation detection results to an investigative journalist. "
+        "For each triggered signal, write exactly one clear sentence stating what the specific numbers mean "
+        "and why they are suspicious. Use the actual values. Never hedge with 'may' or 'could' — "
+        "say what the data shows. Be concise."
+    )
+    user_prompt = (
+        f"Domain: {domain}\n"
+        f"Verdict: {verdict_tier}\n\n"
+        f"Triggered signals ({signals}/{7}):\n{signal_block}\n\n"
+        f"Write a numbered list — one sentence per triggered signal explaining what it means. "
+        f"End with one sentence summarising the overall risk tier."
+    )
+
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key)
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user",   "content": user_prompt},
+            ],
+            max_tokens=250,
+            temperature=0.2,
+        )
+        return resp.choices[0].message.content.strip()
+    except Exception as e:
+        print(f"   ⚠️  GPT explanation failed for {domain}: {e} — using template fallback")
+        return _generate_explanation_template(domain, feats)
+
+
+def gpt_calibration_check(domain: str, feats: dict, verdict: str, confidence: float) -> str:
+    """
+    Day 4: Ask GPT to sanity-check the verdict against the raw signal scores.
+    Returns a short string starting with AGREE, CHALLENGE, or UNCERTAIN.
+    Only called when signals >= 1. Returns empty string on failure.
+    """
+    api_key = os.getenv("OPENAI_API_KEY", "")
+    if not api_key:
+        return ""
+
+    signals = int(feats.get('signals_triggered', 0))
+    summary = (
+        f"Domain: {domain} | Verdict: {verdict} | Confidence: {confidence:.0%} | "
+        f"Signals fired: {signals}/7\n"
+        f"max_similarity={feats.get('max_similarity',0):.3f}, "
+        f"burst_score={feats.get('burst_score',0):.3f}, "
+        f"domain_age_days={feats.get('domain_age_days','?')}, "
+        f"insular_score={feats.get('insular_score',0):.2f}, "
+        f"wayback_snapshots={feats.get('wayback_snapshot_count','?')}, "
+        f"hosting_org={feats.get('hosting_org','?')}\n"
+        f"Signal flags: sim={feats.get('similarity_flag',0)}, cadence={feats.get('cadence_flagged',0)}, "
+        f"whois={feats.get('whois_flagged',0)}, hosting={feats.get('hosting_flagged',0)}, "
+        f"links={feats.get('link_network_flagged',0)}, wayback={feats.get('wayback_flagged',0)}, "
+        f"authors={feats.get('author_overlap_flagged',0)}"
+    )
+
+    system_prompt = (
+        "You are a disinformation detection calibration assistant. "
+        "Evaluate the raw signal scores and say whether the verdict looks well-supported. "
+        "Reply with exactly one of: AGREE, CHALLENGE, or UNCERTAIN — then one sentence of reasoning. "
+        "Example: 'AGREE — three independent signals with strong numeric scores support the SYNTHETIC verdict.'"
+    )
+
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key)
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user",   "content": summary},
+            ],
+            max_tokens=80,
+            temperature=0.1,
+        )
+        return resp.choices[0].message.content.strip()
+    except Exception as e:
+        print(f"   ⚠️  GPT calibration check failed for {domain}: {e}")
+        return ""
 
 
 def produce_verdict(features: dict, sim_edges: dict) -> dict:
@@ -231,10 +362,16 @@ def produce_verdict(features: dict, sim_edges: dict) -> dict:
 
             explanation = generate_explanation(domain, feats)
 
+            # Day 4: GPT confidence calibration check (skip clean ORGANIC to save cost)
+            gpt_review = ""
+            if signals >= 1:
+                gpt_review = gpt_calibration_check(domain, feats, verdict, confidence)
+
             verdicts[domain] = {
                 'verdict':               verdict,
                 'confidence':            confidence,
                 'gnn_raw_score':         round(syn_prob, 4),
+                'gpt_confidence_review': gpt_review,
                 'signals_triggered':     signals,
                 'signal_1_similarity':   int(feats.get('similarity_flag', 0)),
                 'signal_2_cadence':      int(feats.get('cadence_flagged', 0)),
