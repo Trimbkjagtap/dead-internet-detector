@@ -862,16 +862,22 @@ with tab_analyze:
         # SUB-TAB 3 — AI ANALYSIS
         # ══════════════════════════════════════════════
         with r_tab3:
-            st.markdown("#### 🤖 GPT-4o Journalist Briefing")
+            st.markdown("#### 🤖 GPT-4o-mini Journalist Briefing")
             st.markdown(
                 '<div class="info-card">'
                 '<div class="info-card-body">'
-                'Feeds all signal results into GPT-4o and asks it to act as a journalist '
+                'Feeds all signal results into GPT-4o-mini and asks it to act as a disinformation analyst '
                 'assessing whether this looks like a real news operation or a coordinated fake network. '
-                'This is <b>advisory only</b> — always apply human judgment.'
+                'This is <b>advisory only</b> — always apply human judgment. '
+                'If you used <code>/analyze/explain</code>, the briefing is pre-populated below.'
                 '</div></div>',
                 unsafe_allow_html=True,
             )
+
+            # Pre-populate if result already contains ai_journalist_brief (from /analyze/explain)
+            _pre_brief = result.get("ai_journalist_brief", "")
+            if _pre_brief and _pre_brief not in st.session_state.get("ai_analysis", ""):
+                st.session_state["ai_analysis"] = _pre_brief
 
             if st.button("Generate AI Analysis", type="primary"):
                 with st.spinner("GPT-4o-mini analyzing…"):

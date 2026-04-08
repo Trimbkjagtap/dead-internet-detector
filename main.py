@@ -752,6 +752,91 @@ async def get_analyze_job(job_id: str):
     return job
 
 
+@app.post("/analyze/explain", tags=["Analysis"])
+async def analyze_explain(request: AnalyzeRequest):
+    """
+    Run the full pipeline and return an AI-enriched report synchronously.
+    Includes: all 7 signal verdicts, gpt_domain_intent, gpt_confidence_review,
+    author_gpt_note per domain, and ai_journalist_brief for the cluster.
+
+    Use this endpoint when you want a complete enriched report in one call.
+    For large domain sets (>5), prefer /analyze (async) to avoid timeouts.
+    """
+    if not request.domains:
+        raise HTTPException(status_code=400, detail="No domains provided")
+    if len(request.domains) > 10:
+        raise HTTPException(status_code=400, detail="Maximum 10 domains for /analyze/explain (use /analyze for larger sets)")
+
+    domains = []
+    for d in request.domains:
+        d = d.strip().lower().replace("https://", "").replace("http://", "").rstrip("/")
+        if d:
+            domains.append(d)
+    if not domains:
+        raise HTTPException(status_code=400, detail="No valid domains after cleaning")
+
+    try:
+        from agents.crew import run_analysis
+        result = run_analysis(domains)
+        result['analyzed_at'] = datetime.now(timezone.utc).isoformat()
+        result['api_version']  = "1.0.0"
+
+        # Generate journalist briefing server-side so clients don't need OpenAI key
+        api_key = os.getenv("OPENAI_API_KEY", "")
+        if api_key:
+            try:
+                from openai import OpenAI as _OAI
+                domain_verdicts = result.get("domain_verdicts", {})
+                cluster_verdict = result.get("cluster_verdict", "UNKNOWN")
+                domain_summary = "\n".join([
+                    f"- {d}: {v.get('verdict')} "
+                    f"(signals={v.get('signals_triggered',0)}/7 | "
+                    f"intent={v.get('gpt_domain_intent','?')} | "
+                    f"sim={v.get('max_similarity',0):.2f}, "
+                    f"age={v.get('domain_age_days','?')}d, "
+                    f"hosting={v.get('hosting_org','?')}, "
+                    f"wayback={v.get('wayback_snapshot_count','?')} snaps [{v.get('wayback_flag_reason','')}], "
+                    f"authors={v.get('shared_authors','[]')})"
+                    for d, v in domain_verdicts.items()
+                ])
+                _client = _OAI(api_key=api_key)
+                _resp = _client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {"role": "system", "content": (
+                            "You are a disinformation analyst with expertise in detecting coordinated inauthentic "
+                            "behavior, working for a newsroom fact-checking desk. You are rigorous, evidence-based, "
+                            "and direct. You cite specific numbers. You distinguish correlation from confirmed coordination."
+                        )},
+                        {"role": "user", "content": (
+                            f"Investigate whether this domain cluster is a coordinated synthetic content network.\n\n"
+                            f"SIGNAL KEY: 1=content similarity, 2=cadence anomaly, 3=WHOIS age, "
+                            f"4=shared hosting, 5=link insularity, 6=Wayback history, 7=shared author bylines.\n\n"
+                            f"DOMAIN DATA:\n{domain_summary}\n\n"
+                            f"CLUSTER VERDICT: {cluster_verdict}\n\n"
+                            f"Think step by step:\n"
+                            f"1. For each triggered signal, state what the numbers mean and signal strength.\n"
+                            f"2. Overall assessment: real news network, coordinated fake, or ambiguous?\n"
+                            f"3. Two most suspicious specific findings with exact values.\n"
+                            f"4. Three concrete next steps for a journalist to verify or refute.\n\n"
+                            f"Be direct. Cite numbers. Do not hedge when data is clear."
+                        )},
+                    ],
+                    max_tokens=600,
+                    temperature=0.2,
+                )
+                result['ai_journalist_brief'] = _resp.choices[0].message.content.strip()
+            except Exception as e:
+                result['ai_journalist_brief'] = f"[GPT briefing unavailable: {e}]"
+        else:
+            result['ai_journalist_brief'] = ""
+
+        return result
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+
+
 @app.get("/graph/neighborhood/{domain}", tags=["Graph"])
 async def get_graph_neighborhood(domain: str):
     """
