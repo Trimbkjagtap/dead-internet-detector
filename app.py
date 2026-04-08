@@ -11,6 +11,7 @@ import json
 import time
 import os
 import math
+from config.signal_config import SIM_THRESHOLD
 
 # ── Page config ──────────────────────────────────────
 st.set_page_config(
@@ -710,7 +711,7 @@ with tab_analyze:
                     st.markdown(f"### {color_icon} {graph_domain}")
                     st.info(
                         f"**{graph_domain}** is in the database but has no similar domains connected to it yet. "
-                        "This means no other stored domain exceeded the similarity threshold (0.45). "
+                        f"This means no other stored domain exceeded the similarity threshold ({SIM_THRESHOLD}). "
                         "Check the **Evidence** tab — content comparisons may have found partial matches."
                     )
                 else:
@@ -779,7 +780,7 @@ with tab_analyze:
                     st.plotly_chart(fig, width="stretch")
                     st.caption(
                         f"**{graph_domain}** shares similar content with **{len(neighbor_nodes)}** "
-                        f"other domain(s). Lines connect domains above the 0.45 similarity threshold."
+                        f"other domain(s). Lines connect domains above the {SIM_THRESHOLD} similarity threshold."
                     )
 
             elif graph_domain:
@@ -983,7 +984,24 @@ Be direct. Cite numbers. Do not hedge with "may" or "could" when the data is cle
                             else f'<span class="signal-pill-off">✅ {label}</span>'
                             for fired, label in signal_defs
                         )
-                        st.markdown(pills_html, unsafe_allow_html=True)
+                        # Day 8: intent badge alongside signal pills
+                        _intent = dv.get('gpt_domain_intent', '')
+                        _intent_colors = {
+                            "NEWS":        ("#1d4ed8", "#bfdbfe"),
+                            "PROPAGANDA":  ("#991b1b", "#fecaca"),
+                            "COMMERCIAL":  ("#92400e", "#fde68a"),
+                            "SATIRICAL":   ("#5b21b6", "#ddd6fe"),
+                            "AGGREGATOR":  ("#065f46", "#a7f3d0"),
+                            "UNKNOWN":     ("#374151", "#9ca3af"),
+                        }
+                        _ibg, _itxt = _intent_colors.get(_intent, ("#374151", "#9ca3af"))
+                        _intent_badge = (
+                            f'<span style="display:inline-block;padding:2px 10px;border-radius:20px;'
+                            f'background:{_ibg};color:{_itxt};font-size:10px;font-weight:700;'
+                            f'letter-spacing:1px;text-transform:uppercase;margin-left:8px;">'
+                            f'Intent: {_intent or "—"}</span>'
+                        ) if _intent else ""
+                        st.markdown(pills_html + _intent_badge, unsafe_allow_html=True)
                         st.markdown("")
 
                         # Row 1: signals 1–3
@@ -992,7 +1010,7 @@ Be direct. Cite numbers. Do not hedge with "may" or "could" when the data is cle
                             sim_val = float(dv.get("max_similarity") or 0)
                             st.metric("1 · Content Similarity",
                                       "🚨 Triggered" if s1 else "✅ Clear",
-                                      delta=f"score {sim_val:.3f} (threshold 0.45)" if sim_val else "no match found",
+                                      delta=f"score {sim_val:.3f} (threshold {SIM_THRESHOLD})" if sim_val else "no match found",
                                       delta_color="inverse" if s1 else "off",
                                       help="Is the homepage text nearly identical to another domain in the database?")
                         with c2:
@@ -1107,7 +1125,7 @@ Be direct. Cite numbers. Do not hedge with "may" or "could" when the data is cle
             st.markdown("---")
             st.markdown("### 📄 Content Similarity Matches")
             st.caption(
-                "These domain pairs have suspiciously similar homepage text (above 0.45 cosine similarity). "
+                f"These domain pairs have suspiciously similar homepage text (above {SIM_THRESHOLD} cosine similarity). "
                 "Read both excerpts and decide: is this copied content, or just coincidental topic overlap?"
             )
             if not evidence_pairs:
@@ -1125,7 +1143,7 @@ Be direct. Cite numbers. Do not hedge with "may" or "could" when the data is cle
                         st.markdown(
                             f'<div class="evidence-card {ev_class}">'
                             f'Similarity score: <b>{ep["similarity"]:.4f}</b> &nbsp;·&nbsp; '
-                            f'Threshold: 0.45 &nbsp;·&nbsp; '
+                            f'Threshold: {SIM_THRESHOLD} &nbsp;·&nbsp; '
                             f'{"🔴 Very high — likely copied or templated content" if sim_pct >= 0.70 else "🟡 Moderately high — worth investigating"}'
                             f'</div>',
                             unsafe_allow_html=True,
@@ -1146,6 +1164,60 @@ Be direct. Cite numbers. Do not hedge with "may" or "could" when the data is cle
                                 value=ep.get("excerpt_b") or "(no content captured)",
                                 height=200, disabled=True,
                                 key=f"eb_{ep['domain_a']}_{ep['domain_b']}",
+                            )
+
+                        # Day 6: On-demand GPT similarity explanation
+                        _sim_cache_key = f"sim_explain_{ep['domain_a']}_{ep['domain_b']}"
+                        if _sim_cache_key not in st.session_state:
+                            if st.button(
+                                "🤖 Why are these similar? (AI analysis)",
+                                key=f"sim_btn_{ep['domain_a']}_{ep['domain_b']}",
+                            ):
+                                _exc_a = (ep.get("excerpt_a") or "")[:400]
+                                _exc_b = (ep.get("excerpt_b") or "")[:400]
+                                _sim_score = ep.get("similarity", 0)
+                                _openai_key = os.getenv("OPENAI_API_KEY", "")
+                                if not _openai_key:
+                                    st.warning("OPENAI_API_KEY not set — cannot run AI analysis.")
+                                elif not _exc_a and not _exc_b:
+                                    st.info("No text excerpts captured for these domains.")
+                                else:
+                                    with st.spinner("Analyzing similarity…"):
+                                        try:
+                                            from openai import OpenAI as _OAI
+                                            _c = _OAI(api_key=_openai_key)
+                                            _r = _c.chat.completions.create(
+                                                model="gpt-4o-mini",
+                                                messages=[
+                                                    {"role": "system", "content": (
+                                                        "You are a content analyst specializing in detecting "
+                                                        "coordinated inauthentic media. Given two website excerpts "
+                                                        "and their similarity score, identify: (1) which specific "
+                                                        "phrases, topics, or framings are shared; (2) whether this "
+                                                        "looks like directly copied content, paraphrasing, or mere "
+                                                        "topic coincidence. Be specific and cite text."
+                                                    )},
+                                                    {"role": "user", "content": (
+                                                        f"Similarity score: {_sim_score:.3f} (threshold: {SIM_THRESHOLD})\n\n"
+                                                        f"Excerpt A ({ep['domain_a']}):\n{_exc_a}\n\n"
+                                                        f"Excerpt B ({ep['domain_b']}):\n{_exc_b}"
+                                                    )},
+                                                ],
+                                                max_tokens=200,
+                                                temperature=0.2,
+                                            )
+                                            st.session_state[_sim_cache_key] = _r.choices[0].message.content.strip()
+                                        except Exception as _e:
+                                            st.error(f"AI analysis failed: {_e}")
+                        if _sim_cache_key in st.session_state:
+                            st.markdown(
+                                f'<div style="margin-top:8px;padding:12px 14px;border-radius:9px;'
+                                f'background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.25);">'
+                                f'<span style="font-size:10px;font-weight:700;letter-spacing:1.2px;'
+                                f'text-transform:uppercase;color:#60a5fa;">GPT Similarity Analysis</span>'
+                                f'<div style="font-size:13px;color:#cbd5e1;margin-top:6px;">'
+                                f'{st.session_state[_sim_cache_key]}</div></div>',
+                                unsafe_allow_html=True,
                             )
 
             # ── Section 2: Shared Hosting ──────────────
@@ -1182,6 +1254,28 @@ Be direct. Cite numbers. Do not hedge with "may" or "could" when the data is cle
                         f"Author **\"{ae['author']}\"** was found on both **{ae['domain_a']}** and **{ae['domain_b']}**. "
                         f"→ Investigate: is this person real? Do they have a social media presence? Are they listed on both sites?"
                     )
+                # Day 7: show author_gpt_note from any domain that has one
+                _shown_notes = set()
+                for _d, _dv in domain_verdicts.items():
+                    _note = _dv.get('author_gpt_note', '')
+                    if _note and _note not in _shown_notes:
+                        _shown_notes.add(_note)
+                        _note_upper = _note.upper()
+                        if _note_upper.startswith('LIKELY_FAKE'):
+                            _nc, _nb = "rgba(239,68,68,0.10)", "rgba(239,68,68,0.35)"
+                        elif _note_upper.startswith('POSSIBLY_FAKE'):
+                            _nc, _nb = "rgba(249,115,22,0.10)", "rgba(249,115,22,0.35)"
+                        else:
+                            _nc, _nb = "rgba(34,197,94,0.08)", "rgba(34,197,94,0.28)"
+                        st.markdown(
+                            f'<div style="margin-top:10px;padding:12px 14px;border-radius:9px;'
+                            f'background:{_nc};border:1px solid {_nb};">'
+                            f'<span style="font-size:10px;font-weight:700;letter-spacing:1.2px;'
+                            f'text-transform:uppercase;color:#94a3b8;">GPT Persona Analysis — {_d}</span>'
+                            f'<div style="font-size:13px;color:#cbd5e1;margin-top:6px;">{_note}</div>'
+                            f'</div>',
+                            unsafe_allow_html=True,
+                        )
 
         # ── Export & Share ────────────────────────────
         st.divider()

@@ -25,8 +25,17 @@ WAYBACK_RECENT_DAYS   = int(os.getenv("WAYBACK_RECENT_DAYS", "30"))
 WAYBACK_SPIKE_RATIO   = float(os.getenv("WAYBACK_SPIKE_RATIO", "0.5"))
 
 # Verdict thresholds (now 7 signals total)
-SIGNALS_TOTAL             = 7
+SIGNALS_TOTAL               = 7
 SIGNALS_SYNTHETIC_THRESHOLD = int(os.getenv("SIGNALS_SYNTHETIC_THRESHOLD", "3"))
+# GNN training pseudo-label threshold — must match verdict threshold to avoid bias
+PSEUDO_LABEL_THRESHOLD      = SIGNALS_SYNTHETIC_THRESHOLD
+
+# Canonical noise-author set — shared by crawler_agent and fingerprint_agent
+NOISE_AUTHORS = {
+    "reuters", "ap", "associated press", "staff writer", "news desk",
+    "wire service", "staff reporter", "the editors", "editorial board",
+    "admin", "editor", "contributor", "guest writer", "press release",
+}
 
 
 def bounded_contamination(sample_size: int) -> float:

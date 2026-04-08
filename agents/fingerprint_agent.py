@@ -312,11 +312,7 @@ def compute_signal3_whois(domains_data: list) -> dict:
 
 _CDN_ASNS = {"AS13335", "AS54113", "AS16509", "AS15169", "AS20940", "AS209242", "AS22120", "AS14618", "AS8075"}
 
-_NOISE_AUTHORS = {
-    "reuters", "ap", "associated press", "staff writer", "news desk",
-    "wire service", "staff reporter", "the editors", "editorial board",
-    "admin", "editor", "contributor", "guest writer", "press release",
-}
+from config.signal_config import NOISE_AUTHORS as _NOISE_AUTHORS
 
 
 def compute_signal4_hosting(domains_data: list) -> dict:

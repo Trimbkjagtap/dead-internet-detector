@@ -87,7 +87,7 @@ def run_analysis(seed_domains: list) -> dict:
     print("━" * 40)
     print("STEP 4/4 — Verdict Agent")
     print("━" * 40)
-    verdict = produce_verdict(features, sim_edges)
+    verdict = produce_verdict(features, sim_edges, excerpts=excerpts)
     print()
 
     # ── Build final result ──────────────────────────

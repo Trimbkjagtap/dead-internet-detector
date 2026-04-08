@@ -305,7 +305,78 @@ def gpt_calibration_check(domain: str, feats: dict, verdict: str, confidence: fl
         return ""
 
 
-def produce_verdict(features: dict, sim_edges: dict) -> dict:
+def gpt_author_analysis(domain: str, shared_authors_list: list) -> str:
+    """
+    Day 7: Assess whether shared author names look like real people or pseudonyms.
+    Returns LIKELY_REAL / POSSIBLY_FAKE / LIKELY_FAKE + 2 sentences. Empty string on failure.
+    """
+    api_key = os.getenv("OPENAI_API_KEY", "")
+    if not api_key or not shared_authors_list:
+        return ""
+
+    names_str = ", ".join(f'"{a}"' for a in shared_authors_list[:10])
+    system_prompt = (
+        "You are an investigative journalist trained to spot fake author personas used in disinformation networks. "
+        "Analyze a list of author names that appear across multiple domains. "
+        "Assess: do these look like real people (varied, culturally plausible) or likely pseudonyms "
+        "(generic, alliterative, pattern-matched, or suspiciously similar)? "
+        "Output exactly: LIKELY_REAL, POSSIBLY_FAKE, or LIKELY_FAKE — then exactly two sentences."
+    )
+
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key)
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user",   "content": f"Shared author names on {domain}: {names_str}"},
+            ],
+            max_tokens=100,
+            temperature=0.2,
+        )
+        return resp.choices[0].message.content.strip()
+    except Exception as e:
+        print(f"   ⚠️  GPT author analysis failed for {domain}: {e}")
+        return ""
+
+
+def gpt_intent_classify(domain: str, excerpt: str) -> str:
+    """
+    Day 8: Classify domain intent from homepage text.
+    Returns one of: NEWS / PROPAGANDA / COMMERCIAL / SATIRICAL / AGGREGATOR / UNKNOWN
+    """
+    api_key = os.getenv("OPENAI_API_KEY", "")
+    if not api_key or not excerpt or len(excerpt.strip()) < 20:
+        return "UNKNOWN"
+
+    system_prompt = (
+        "Classify this website's intent based on its homepage text. "
+        "Output exactly one word from: NEWS, PROPAGANDA, COMMERCIAL, SATIRICAL, AGGREGATOR, UNKNOWN. "
+        "No explanation, no punctuation — just the single word."
+    )
+
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key)
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user",   "content": excerpt[:600]},
+            ],
+            max_tokens=5,
+            temperature=0.0,
+        )
+        result = resp.choices[0].message.content.strip().upper()
+        valid = {"NEWS", "PROPAGANDA", "COMMERCIAL", "SATIRICAL", "AGGREGATOR", "UNKNOWN"}
+        return result if result in valid else "UNKNOWN"
+    except Exception as e:
+        print(f"   ⚠️  GPT intent classification failed for {domain}: {e}")
+        return "UNKNOWN"
+
+
+def produce_verdict(features: dict, sim_edges: dict, excerpts: dict = None) -> dict:
     """
     Main verdict function.
     Runs GNN inference and produces final verdict for all domains.
@@ -367,11 +438,27 @@ def produce_verdict(features: dict, sim_edges: dict) -> dict:
             if signals >= 1:
                 gpt_review = gpt_calibration_check(domain, feats, verdict, confidence)
 
+            # Day 7: GPT author pseudonym analysis (only when Signal 7 fires)
+            author_gpt_note = ""
+            if feats.get('author_overlap_flagged', 0):
+                try:
+                    shared_list = json.loads(feats.get('shared_authors', '[]'))
+                except Exception:
+                    shared_list = []
+                if shared_list:
+                    author_gpt_note = gpt_author_analysis(domain, shared_list)
+
+            # Day 8: GPT domain intent classification from homepage excerpt
+            excerpt_text = (excerpts or {}).get(domain, "")
+            gpt_intent = gpt_intent_classify(domain, excerpt_text)
+
             verdicts[domain] = {
                 'verdict':               verdict,
                 'confidence':            confidence,
                 'gnn_raw_score':         round(syn_prob, 4),
                 'gpt_confidence_review': gpt_review,
+                'author_gpt_note':       author_gpt_note,
+                'gpt_domain_intent':     gpt_intent,
                 'signals_triggered':     signals,
                 'signal_1_similarity':   int(feats.get('similarity_flag', 0)),
                 'signal_2_cadence':      int(feats.get('cadence_flagged', 0)),

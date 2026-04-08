@@ -39,11 +39,7 @@ _BYLINE_RE = [
     re.compile(r"[Aa]uthor[:\s]+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})"),
     re.compile(r'[Ww]ritten\s+[Bb]y\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})'),
 ]
-_NOISE_AUTHORS = {
-    "reuters", "ap", "associated press", "staff writer", "news desk",
-    "wire service", "staff reporter", "the editors", "editorial board",
-    "admin", "editor", "contributor", "guest writer", "press release",
-}
+from config.signal_config import NOISE_AUTHORS as _NOISE_AUTHORS
 
 # Track failed domains globally so we can report them
 _failed_domains = []
