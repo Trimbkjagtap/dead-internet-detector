@@ -1,0 +1,25 @@
+{
+  "report_id": "2f645478-c41e-4d8e-b376-6917681da425",
+  "saved_at": "2026-03-30T18:54:14.076554+00:00",
+  "project": "Dead Internet Detector",
+  "analyzed_at": "2026-03-30T18:54:01.173165+00:00",
+  "seed_domains": [
+    "www.youtube.com"
+  ],
+  "cluster_verdict": "ORGANIC",
+  "confidence": 0.76,
+  "summary": "Preliminary check only. A full network analysis has been queued in the background.",
+  "domain_verdicts": {
+    "www.youtube.com": {
+      "verdict": "ORGANIC",
+      "confidence": 0.76,
+      "signals_triggered": 0,
+      "signal_1_similarity": 0,
+      "signal_2_cadence": 0,
+      "signal_3_whois": 0,
+      "explanation": "No strong warning signs were found in quick domain-registration heuristics"
+    }
+  },
+  "evidence_pairs": [],
+  "analysis_type": "preliminary"
+}

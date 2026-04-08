@@ -22,6 +22,7 @@ sys.path.insert(0, '.')
 
 REPORTS_DIR  = Path("data/reports")
 LOG_CSV      = REPORTS_DIR / "evaluation_log.csv"
+DOMAIN_FEAT  = Path("data/domain_features.csv")   # fallback: richer pre-v4 run
 RESULTS_JSON = REPORTS_DIR / "evaluation_results.json"
 
 SIGNAL_COLS = [
@@ -33,6 +34,19 @@ SIGNAL_COLS = [
     "signal_6_wayback",
     "signal_7_authors",
 ]
+
+# Column mapping from domain_features.csv to our standard signal names
+DOMAIN_FEAT_SIGNAL_MAP = {
+    "signal_1_similarity":   "similarity_flag",
+    "signal_2_cadence":      "cadence_flagged",
+    "signal_3_whois":        "whois_flagged",
+    "signal_4_hosting":      None,   # not in old format
+    "signal_5_link_network": None,
+    "signal_6_wayback":      None,
+    "signal_7_authors":      None,
+}
+DOMAIN_FEAT_EXTRA_COLS = ["avg_similarity", "max_similarity", "burst_score",
+                           "domain_age_days"]
 
 
 def compute_metrics(y_true, y_pred, y_prob=None):
@@ -52,6 +66,63 @@ def compute_metrics(y_true, y_pred, y_prob=None):
     }
 
 
+def load_dataset() -> tuple:
+    """
+    Load the best available labeled dataset for model comparison.
+    Prefers evaluation_log.csv if it has non-zero signal variance;
+    falls back to domain_features.csv which has richer signal coverage.
+    Returns (X, y, feature_names, predicted_labels, signal_count_proxy).
+    """
+    # Try evaluation_log.csv first
+    if LOG_CSV.exists():
+        df = pd.read_csv(LOG_CSV)
+        for col in SIGNAL_COLS:
+            if col not in df.columns:
+                df[col] = 0
+        # Check if we have useful signal variance:
+        # Need at least 3 different signals firing and both classes present
+        signals_firing = (df[SIGNAL_COLS].sum(axis=0) > 0).sum()
+        has_positives = df["predicted_label"].sum() > 0
+        if signals_firing >= 3 and has_positives:
+            X = df[SIGNAL_COLS].fillna(0).values.astype(float)
+            y = df["label"].values.astype(int)
+            y_pred_rule = df["predicted_label"].tolist()
+            y_prob_rule = (df[SIGNAL_COLS].sum(axis=1) / 7).tolist()
+            print(f"  Source: evaluation_log.csv ({signal_sum:.0f} total signal activations)")
+            return X, y, SIGNAL_COLS, y_pred_rule, y_prob_rule, df
+
+    # Fallback: domain_features.csv — older but richer
+    if DOMAIN_FEAT.exists():
+        print(f"  ⚠️  evaluation_log.csv has insufficient signal variance — "
+              f"using domain_features.csv (pre-v4 run)")
+        df = pd.read_csv(DOMAIN_FEAT)
+
+        # Map columns to standard signal names
+        for std_col, old_col in DOMAIN_FEAT_SIGNAL_MAP.items():
+            if old_col and old_col in df.columns:
+                df[std_col] = df[old_col]
+            else:
+                df[std_col] = 0
+
+        # Build richer feature set for LR (include continuous scores)
+        feat_cols = SIGNAL_COLS + [c for c in DOMAIN_FEAT_EXTRA_COLS if c in df.columns]
+
+        # 3-of-7 rule prediction (use signals_triggered from file)
+        if "signals_triggered" in df.columns:
+            y_pred_rule = (df["signals_triggered"] >= 2).astype(int).tolist()
+            y_prob_rule = (df["signals_triggered"] / 7).tolist()
+        else:
+            y_pred_rule = (df[SIGNAL_COLS].sum(axis=1) >= 2).astype(int).tolist()
+            y_prob_rule = (df[SIGNAL_COLS].sum(axis=1) / 7).tolist()
+
+        X = df[feat_cols].fillna(0).values.astype(float)
+        y = df["label"].values.astype(int)
+        return X, y, feat_cols, y_pred_rule, y_prob_rule, df
+
+    print("❌ No suitable dataset found. Run evaluate_ground_truth.py first.")
+    sys.exit(1)
+
+
 def main():
     from sklearn.linear_model import LogisticRegression
     from sklearn.model_selection import StratifiedKFold, cross_val_predict
@@ -61,17 +132,7 @@ def main():
     print("📈 Dead Internet Detector — Baseline Model Comparison")
     print("=" * 60)
 
-    if not LOG_CSV.exists():
-        print(f"❌ {LOG_CSV} not found. Run evaluate_ground_truth.py first.")
-        sys.exit(1)
-
-    df = pd.read_csv(LOG_CSV)
-    for col in SIGNAL_COLS:
-        if col not in df.columns:
-            df[col] = 0
-
-    X = df[SIGNAL_COLS].values.astype(float)
-    y = df["label"].values.astype(int)
+    X, y, feat_names, y_pred_rule, y_prob_rule, df = load_dataset()
 
     print(f"  Dataset: {len(df)} domains  "
           f"({y.sum()} synthetic, {(y==0).sum()} organic)\n")
@@ -79,9 +140,6 @@ def main():
     results = {}
 
     # ── Baseline 1: 3-of-7 Rule (already evaluated) ──────────────
-    y_pred_rule = df["predicted_label"].tolist()
-    # 3-of-7 has no probability, use signal count / 7 as proxy score
-    y_prob_rule = (df[SIGNAL_COLS].sum(axis=1) / 7).tolist()
     m_rule = compute_metrics(y, y_pred_rule, y_prob_rule)
     results["3-of-7 Rule"] = m_rule
     print(f"  3-of-7 Rule      F1={m_rule['f1']:.4f}  "
@@ -89,11 +147,15 @@ def main():
           f"AUC={m_rule['auc_roc']}")
 
     # ── Baseline 2: Logistic Regression (5-fold CV) ────────────────
+    from sklearn.preprocessing import StandardScaler
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+
     lr = LogisticRegression(max_iter=1000, class_weight="balanced",
                             random_state=42, solver="lbfgs")
     cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
 
-    y_prob_lr   = cross_val_predict(lr, X, y, cv=cv, method="predict_proba")[:, 1]
+    y_prob_lr   = cross_val_predict(lr, X_scaled, y, cv=cv, method="predict_proba")[:, 1]
     y_pred_lr   = (y_prob_lr >= 0.5).astype(int)
     m_lr = compute_metrics(y, y_pred_lr, y_prob_lr)
     results["Logistic Regression (5-fold CV)"] = m_lr
@@ -102,9 +164,9 @@ def main():
           f"AUC={m_lr['auc_roc']}")
 
     # Train final LR on full data for coefficient inspection
-    lr.fit(X, y)
+    lr.fit(X_scaled, y)
     coef_df = pd.DataFrame({
-        "signal": SIGNAL_COLS,
+        "signal": feat_names,
         "coefficient": lr.coef_[0].round(4),
     }).sort_values("coefficient", ascending=False)
     print("\n  Logistic Regression coefficients (higher = more predictive):")

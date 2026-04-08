@@ -1,0 +1,86 @@
+{
+  "signal_1_similarity": {
+    "signal_name": "Content Similarity",
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1": 0.0,
+    "accuracy": 0.5,
+    "fpr": 0.0,
+    "tp": 0,
+    "tn": 50,
+    "fp": 0,
+    "fn": 50
+  },
+  "signal_2_cadence": {
+    "signal_name": "Cadence Anomaly",
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1": 0.0,
+    "accuracy": 0.5,
+    "fpr": 0.0,
+    "tp": 0,
+    "tn": 50,
+    "fp": 0,
+    "fn": 50
+  },
+  "signal_3_whois": {
+    "signal_name": "WHOIS Registration",
+    "precision": 1.0,
+    "recall": 0.18,
+    "f1": 0.3051,
+    "accuracy": 0.59,
+    "fpr": 0.0,
+    "tp": 9,
+    "tn": 50,
+    "fp": 0,
+    "fn": 41
+  },
+  "signal_4_hosting": {
+    "signal_name": "Shared Hosting",
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1": 0.0,
+    "accuracy": 0.5,
+    "fpr": 0.0,
+    "tp": 0,
+    "tn": 50,
+    "fp": 0,
+    "fn": 50
+  },
+  "signal_5_link_network": {
+    "signal_name": "Insular Link Network",
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1": 0.0,
+    "accuracy": 0.5,
+    "fpr": 0.0,
+    "tp": 0,
+    "tn": 50,
+    "fp": 0,
+    "fn": 50
+  },
+  "signal_6_wayback": {
+    "signal_name": "Wayback History",
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1": 0.0,
+    "accuracy": 0.5,
+    "fpr": 0.0,
+    "tp": 0,
+    "tn": 50,
+    "fp": 0,
+    "fn": 50
+  },
+  "signal_7_authors": {
+    "signal_name": "Author Overlap",
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1": 0.0,
+    "accuracy": 0.5,
+    "fpr": 0.0,
+    "tp": 0,
+    "tn": 50,
+    "fp": 0,
+    "fn": 50
+  }
+}

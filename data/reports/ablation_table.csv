@@ -1,0 +1,9 @@
+signal_removed,signal_key,precision,recall,f1,accuracy,tp,tn,fp,fn,delta_f1
+None (full model),full,0.9714,0.5667,0.7158,0.7216,34,36,1,26,0.0
+Content Similarity,signal_1_similarity,1.0,0.1167,0.209,0.4536,7,37,0,53,-0.5068
+Cadence Anomaly,signal_2_cadence,1.0,0.5,0.6667,0.6907,30,37,0,30,-0.0491
+WHOIS Registration,signal_3_whois,0.875,0.1167,0.2059,0.4433,7,36,1,53,-0.5099
+Shared Hosting,signal_4_hosting,0.9714,0.5667,0.7158,0.7216,34,36,1,26,0.0
+Insular Link Network,signal_5_link_network,0.9714,0.5667,0.7158,0.7216,34,36,1,26,0.0
+Wayback History,signal_6_wayback,0.9714,0.5667,0.7158,0.7216,34,36,1,26,0.0
+Author Overlap,signal_7_authors,0.9714,0.5667,0.7158,0.7216,34,36,1,26,0.0

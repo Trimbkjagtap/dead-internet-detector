@@ -1,0 +1,308 @@
+{
+  "timestamp": "20260408_210148",
+  "dataset_size": 100,
+  "n_synthetic": 50,
+  "n_organic": 50,
+  "overall": {
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1": 0.0,
+    "accuracy": 0.5,
+    "fpr": 0.0,
+    "tp": 0,
+    "tn": 50,
+    "fp": 0,
+    "fn": 50
+  },
+  "per_signal": {
+    "signal_1_similarity": {
+      "signal_name": "Content Similarity",
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "accuracy": 0.5,
+      "fpr": 0.0,
+      "tp": 0,
+      "tn": 50,
+      "fp": 0,
+      "fn": 50
+    },
+    "signal_2_cadence": {
+      "signal_name": "Cadence Anomaly",
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "accuracy": 0.5,
+      "fpr": 0.0,
+      "tp": 0,
+      "tn": 50,
+      "fp": 0,
+      "fn": 50
+    },
+    "signal_3_whois": {
+      "signal_name": "WHOIS Registration",
+      "precision": 1.0,
+      "recall": 0.18,
+      "f1": 0.3051,
+      "accuracy": 0.59,
+      "fpr": 0.0,
+      "tp": 9,
+      "tn": 50,
+      "fp": 0,
+      "fn": 41
+    },
+    "signal_4_hosting": {
+      "signal_name": "Shared Hosting",
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "accuracy": 0.5,
+      "fpr": 0.0,
+      "tp": 0,
+      "tn": 50,
+      "fp": 0,
+      "fn": 50
+    },
+    "signal_5_link_network": {
+      "signal_name": "Insular Link Network",
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "accuracy": 0.5,
+      "fpr": 0.0,
+      "tp": 0,
+      "tn": 50,
+      "fp": 0,
+      "fn": 50
+    },
+    "signal_6_wayback": {
+      "signal_name": "Wayback History",
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "accuracy": 0.5,
+      "fpr": 0.0,
+      "tp": 0,
+      "tn": 50,
+      "fp": 0,
+      "fn": 50
+    },
+    "signal_7_authors": {
+      "signal_name": "Author Overlap",
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "accuracy": 0.5,
+      "fpr": 0.0,
+      "tp": 0,
+      "tn": 50,
+      "fp": 0,
+      "fn": 50
+    }
+  },
+  "skip_crawl": true,
+  "ablation": [
+    {
+      "signal_removed": "None (full model)",
+      "signal_key": "full",
+      "precision": 0.9714,
+      "recall": 0.5667,
+      "f1": 0.7158,
+      "accuracy": 0.7216,
+      "tp": 34,
+      "tn": 36,
+      "fp": 1,
+      "fn": 26,
+      "delta_f1": 0.0
+    },
+    {
+      "signal_removed": "Content Similarity",
+      "signal_key": "signal_1_similarity",
+      "precision": 1.0,
+      "recall": 0.1167,
+      "f1": 0.209,
+      "accuracy": 0.4536,
+      "tp": 7,
+      "tn": 37,
+      "fp": 0,
+      "fn": 53,
+      "delta_f1": -0.5068
+    },
+    {
+      "signal_removed": "Cadence Anomaly",
+      "signal_key": "signal_2_cadence",
+      "precision": 1.0,
+      "recall": 0.5,
+      "f1": 0.6667,
+      "accuracy": 0.6907,
+      "tp": 30,
+      "tn": 37,
+      "fp": 0,
+      "fn": 30,
+      "delta_f1": -0.0491
+    },
+    {
+      "signal_removed": "WHOIS Registration",
+      "signal_key": "signal_3_whois",
+      "precision": 0.875,
+      "recall": 0.1167,
+      "f1": 0.2059,
+      "accuracy": 0.4433,
+      "tp": 7,
+      "tn": 36,
+      "fp": 1,
+      "fn": 53,
+      "delta_f1": -0.5099
+    },
+    {
+      "signal_removed": "Shared Hosting",
+      "signal_key": "signal_4_hosting",
+      "precision": 0.9714,
+      "recall": 0.5667,
+      "f1": 0.7158,
+      "accuracy": 0.7216,
+      "tp": 34,
+      "tn": 36,
+      "fp": 1,
+      "fn": 26,
+      "delta_f1": 0.0
+    },
+    {
+      "signal_removed": "Insular Link Network",
+      "signal_key": "signal_5_link_network",
+      "precision": 0.9714,
+      "recall": 0.5667,
+      "f1": 0.7158,
+      "accuracy": 0.7216,
+      "tp": 34,
+      "tn": 36,
+      "fp": 1,
+      "fn": 26,
+      "delta_f1": 0.0
+    },
+    {
+      "signal_removed": "Wayback History",
+      "signal_key": "signal_6_wayback",
+      "precision": 0.9714,
+      "recall": 0.5667,
+      "f1": 0.7158,
+      "accuracy": 0.7216,
+      "tp": 34,
+      "tn": 36,
+      "fp": 1,
+      "fn": 26,
+      "delta_f1": 0.0
+    },
+    {
+      "signal_removed": "Author Overlap",
+      "signal_key": "signal_7_authors",
+      "precision": 0.9714,
+      "recall": 0.5667,
+      "f1": 0.7158,
+      "accuracy": 0.7216,
+      "tp": 34,
+      "tn": 36,
+      "fp": 1,
+      "fn": 26,
+      "delta_f1": 0.0
+    }
+  ],
+  "model_comparison": {
+    "3-of-7 Rule": {
+      "precision": 0.9714,
+      "recall": 0.5667,
+      "f1": 0.7158,
+      "accuracy": 0.7216,
+      "auc_roc": 0.7579
+    },
+    "Logistic Regression (5-fold CV)": {
+      "precision": 0.9111,
+      "recall": 0.6833,
+      "f1": 0.781,
+      "accuracy": 0.7629,
+      "auc_roc": 0.8311
+    },
+    "GCN": {
+      "precision": 1.0,
+      "recall": 0.5833,
+      "f1": 0.7368,
+      "accuracy": 0.75,
+      "auc_roc": "N/A"
+    }
+  },
+  "logreg_coefficients": [
+    {
+      "signal": "signal_3_whois",
+      "coefficient": 1.812
+    },
+    {
+      "signal": "max_similarity",
+      "coefficient": 0.6724
+    },
+    {
+      "signal": "signal_1_similarity",
+      "coefficient": 0.0813
+    },
+    {
+      "signal": "signal_4_hosting",
+      "coefficient": 0.0
+    },
+    {
+      "signal": "signal_5_link_network",
+      "coefficient": 0.0
+    },
+    {
+      "signal": "signal_6_wayback",
+      "coefficient": 0.0
+    },
+    {
+      "signal": "signal_7_authors",
+      "coefficient": 0.0
+    },
+    {
+      "signal": "domain_age_days",
+      "coefficient": 0.0
+    },
+    {
+      "signal": "signal_2_cadence",
+      "coefficient": -0.0391
+    },
+    {
+      "signal": "burst_score",
+      "coefficient": -0.3909
+    },
+    {
+      "signal": "avg_similarity",
+      "coefficient": -0.8284
+    }
+  ],
+  "gnn_evaluation": {
+    "timestamp": "2026-04-08T17:21:21.352578",
+    "model": "models/gnn_model.pt",
+    "n_domains": 97,
+    "n_train": 77,
+    "n_test": 20,
+    "n_features": 10,
+    "feature_cols": [
+      "avg_similarity",
+      "max_similarity",
+      "anomaly_score",
+      "burst_score",
+      "hour_variance",
+      "domain_age_days",
+      "signals_triggered",
+      "similarity_flag",
+      "cadence_flagged",
+      "whois_flagged"
+    ],
+    "test_metrics": {
+      "precision": 1.0,
+      "recall": 0.5833,
+      "f1": 0.7368,
+      "accuracy": 0.75
+    },
+    "best_val_f1": 0.7368,
+    "epochs": 150,
+    "hidden_dim": 64
+  }
+}

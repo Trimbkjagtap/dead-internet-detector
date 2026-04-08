@@ -13,13 +13,23 @@ Outputs saved to data/reports/:
   per_signal_metrics.json   ← per-signal breakdown
   confusion_matrix.png      ← visual confusion matrix
   evaluation_log.csv        ← per-domain predicted vs actual
+  cluster_evaluation.json   ← cluster-mode results (--cluster)
 
 Usage:
-  python3 -m tests.evaluate_ground_truth [--limit N] [--skip-crawl]
+  python3 -m tests.evaluate_ground_truth [--limit N] [--skip-crawl] [--cluster]
 
   --limit N      only evaluate first N domains (for quick smoke tests)
   --skip-crawl   use cached WHOIS/enrichment only, skip live crawl
                  (faster, uses existing data/enrichment_cache.json)
+  --cluster      also run cluster-mode eval: all synthetic domains as one batch
+                 and all organic as another — tests cross-domain signals (1, 5, 7)
+
+NOTE on evaluation methodology:
+  The Dead Internet Detector is designed for NETWORK-LEVEL detection.
+  Signals 1 (content similarity), 5 (link network), and 7 (author overlap)
+  are cross-domain signals that cannot fire in single-domain mode.
+  Single-domain eval measures only signals 2–4 and 6.
+  Use --cluster for a realistic assessment of network detection capability.
 """
 
 import sys
@@ -214,12 +224,116 @@ def save_confusion_matrix_png(tp, tn, fp, fn, path: Path):
         print(f"  ⚠️  Could not save confusion matrix PNG: {e}")
 
 
+def run_cluster_evaluation(gt: pd.DataFrame, skip_crawl: bool) -> dict:
+    """
+    Cluster-mode evaluation: run all synthetic domains together as one batch,
+    then all organic as another. This exercises cross-domain signals (1, 5, 7).
+
+    Returns dict with metrics for synthetic_cluster and organic_cluster.
+    """
+    from agents.fingerprint_agent import analyze_domains
+    from agents.verdict_agent import produce_verdict
+
+    print()
+    print("=" * 60)
+    print("🔗 CLUSTER-MODE EVALUATION")
+    print("  (cross-domain signals: similarity, link network, author overlap)")
+    print("=" * 60)
+
+    synthetic_domains = gt[gt["label"] == 1]["domain"].tolist()
+    organic_domains   = gt[gt["label"] == 0]["domain"].tolist()
+
+    cluster_results = {}
+
+    for cluster_name, domains, expected_label in [
+        ("synthetic_cluster", synthetic_domains, 1),
+        ("organic_cluster",   organic_domains,   0),
+    ]:
+        print(f"\n  Cluster: {cluster_name} ({len(domains)} domains)")
+        crawled = [crawl_single(d, skip_crawl) for d in domains]
+        crawled = [c for c in crawled if c]
+
+        try:
+            analysis = analyze_domains(crawled)
+            features  = analysis.get("features", {})
+            sim_edges = analysis.get("sim_edges", {})
+            excerpts  = analysis.get("excerpts", {})
+            verdict_result = produce_verdict(features, sim_edges, excerpts=excerpts)
+            domain_verdicts = verdict_result.get("domain_verdicts", {})
+
+            per_domain = {}
+            for d in domains:
+                dv = domain_verdicts.get(d, {})
+                per_domain[d] = {
+                    "verdict":           dv.get("verdict", "ORGANIC"),
+                    "signals_triggered": dv.get("signals_triggered", 0),
+                    "confidence":        dv.get("confidence", 0.0),
+                    "predicted_label":   VERDICT_TO_BINARY.get(dv.get("verdict", "ORGANIC"), 0),
+                }
+                correct = per_domain[d]["predicted_label"] == expected_label
+                print(f"    {'✅' if correct else '❌'} {d}: "
+                      f"{per_domain[d]['verdict']} "
+                      f"(signals={per_domain[d]['signals_triggered']})")
+
+            # Aggregate: fraction flagged
+            flagged = sum(1 for v in per_domain.values() if v["predicted_label"] == 1)
+            cluster_results[cluster_name] = {
+                "n_domains": len(domains),
+                "n_flagged": flagged,
+                "flagged_rate": round(flagged / len(domains), 4) if domains else 0.0,
+                "expected_label": expected_label,
+                "per_domain": per_domain,
+                # Signals summary from features
+                "signals_fired": {
+                    col: sum(1 for d in domains
+                             if features.get(d, {}).get(col.replace("signal_", "").replace("_", "_") + "_flagged"
+                                                        if "signal_" in col else col, 0))
+                    for col in ["similarity_flag", "cadence_flagged", "whois_flagged",
+                                "hosting_flagged", "link_network_flagged",
+                                "wayback_flagged", "author_overlap_flagged"]
+                },
+            }
+        except Exception as e:
+            print(f"    ❌ Cluster pipeline error: {e}")
+            cluster_results[cluster_name] = {"error": str(e), "n_domains": len(domains)}
+
+    # Compute cluster-level TP/FP metrics
+    syn = cluster_results.get("synthetic_cluster", {})
+    org = cluster_results.get("organic_cluster", {})
+
+    if syn and org and "n_flagged" in syn and "n_flagged" in org:
+        tp = syn["n_flagged"]
+        fn = syn["n_domains"] - tp
+        fp = org["n_flagged"]
+        tn = org["n_domains"] - fp
+
+        precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+        recall    = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+        f1        = (2 * precision * recall / (precision + recall)
+                     if (precision + recall) > 0 else 0.0)
+
+        print(f"\n  Cluster-mode overall:")
+        print(f"    TP={tp}  FN={fn}  FP={fp}  TN={tn}")
+        print(f"    Precision={precision:.3f}  Recall={recall:.3f}  F1={f1:.3f}")
+
+        cluster_results["overall"] = {
+            "tp": tp, "fn": fn, "fp": fp, "tn": tn,
+            "precision": round(precision, 4),
+            "recall": round(recall, 4),
+            "f1": round(f1, 4),
+        }
+
+    return cluster_results
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--limit", type=int, default=None,
                         help="Evaluate only first N domains")
     parser.add_argument("--skip-crawl", action="store_true",
                         help="Skip live crawl (use cached data only)")
+    parser.add_argument("--cluster", action="store_true",
+                        help="Also run cluster-mode evaluation (tests cross-domain signals)")
     args = parser.parse_args()
 
     print("=" * 60)
@@ -339,7 +453,19 @@ def main():
     )
 
     print()
-    print(f"  🎯 F1 = {overall['f1']:.4f}")
+    print(f"  🎯 F1 = {overall['f1']:.4f} (single-domain mode)")
+
+    # ── Cluster-mode evaluation ──────────────────────────────────
+    if args.cluster:
+        cluster_res = run_cluster_evaluation(gt, skip_crawl=args.skip_crawl)
+        cluster_path = REPORTS_DIR / "cluster_evaluation.json"
+        cluster_path.write_text(json.dumps(cluster_res, indent=2))
+        print(f"\n  ✅ Cluster results  → {cluster_path}")
+        if "overall" in cluster_res:
+            co = cluster_res["overall"]
+            print(f"  🎯 Cluster F1 = {co['f1']:.4f}  "
+                  f"(Precision={co['precision']:.3f}, Recall={co['recall']:.3f})")
+
     print("=" * 60)
 
 

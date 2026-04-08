@@ -667,12 +667,13 @@ with tab_analyze:
         author_evidence  = result.get("author_evidence",  [])
         total_evidence   = len(evidence_pairs) + len(hosting_evidence) + len(author_evidence)
 
-        r_tab1, r_tab2, r_tab3, r_tab4, r_tab5 = st.tabs([
+        r_tab1, r_tab2, r_tab3, r_tab4, r_tab5, r_tab6 = st.tabs([
             "🕸️ Network Graph",
             "📊 Signal Heatmap",
             "🤖 AI Analysis",
             "📋 Per-Domain Details",
             f"🔍 Evidence ({total_evidence})",
+            "📈 Signal Reliability",
         ])
 
         # ══════════════════════════════════════════════
@@ -1406,6 +1407,129 @@ Be direct. Cite numbers. Do not hedge with "may" or "could" when the data is cle
 
         with st.expander("🔧 Raw API Response (for debugging)"):
             st.json(result)
+
+        # ══════════════════════════════════════════════
+        # SUB-TAB 6 — SIGNAL RELIABILITY
+        # ══════════════════════════════════════════════
+        with r_tab6:
+            st.markdown("#### Signal Reliability & Model Comparison")
+            st.markdown(
+                '<div class="info-card"><div class="info-card-body">'
+                'How well does each signal predict coordinated inauthentic behaviour? '
+                'These metrics were computed on a 97-domain labeled dataset '
+                '(60 synthetic networks, 37 organic outlets). '
+                'Ablation = drop in F1 when this signal is removed from the 3-of-7 rule.'
+                '</div></div>',
+                unsafe_allow_html=True,
+            )
+
+            # ── Per-signal ablation table ──────────────────────────
+            import os as _os
+            _ablation_path = "data/reports/ablation_table.csv"
+            _eval_path     = "data/reports/evaluation_results.json"
+            _model_comp    = "data/reports/model_comparison.csv"
+            _ablation_chart = "data/reports/ablation_chart.png"
+
+            if _os.path.exists(_ablation_path):
+                import pandas as _pd_tab6
+                abl_df = _pd_tab6.read_csv(_ablation_path)
+                abl_df = abl_df[abl_df["signal_key"] != "full"].copy()
+
+                st.markdown("##### Ablation Study — Marginal Signal Contribution")
+                st.caption(
+                    "Delta-F1 shows how much overall F1 drops when each signal is disabled. "
+                    "Negative = signal is useful. Zero = signal not yet active in this evaluation run."
+                )
+
+                # Display as styled table
+                display_cols = ["signal_removed", "f1", "delta_f1", "precision", "recall"]
+                display_cols = [c for c in display_cols if c in abl_df.columns]
+                disp = abl_df[display_cols].copy()
+                disp.columns = ["Signal", "F1", "ΔF1 (removed)", "Precision", "Recall"]
+                disp["F1"]  = disp["F1"].apply(lambda x: f"{x:.3f}")
+                disp["ΔF1 (removed)"] = disp["ΔF1 (removed)"].apply(
+                    lambda x: f"{x:+.3f}" if x != 0 else "—"
+                )
+                disp["Precision"] = disp["Precision"].apply(lambda x: f"{x:.3f}")
+                disp["Recall"]    = disp["Recall"].apply(lambda x: f"{x:.3f}")
+                st.dataframe(disp, use_container_width=True, hide_index=True)
+
+                if _os.path.exists(_ablation_chart):
+                    st.image(_ablation_chart, use_container_width=True)
+            else:
+                st.info("Ablation results not yet computed. Run `python3 -m tests.ablation_study`.")
+
+            st.markdown("---")
+            st.markdown("##### Model Comparison (3-of-7 Rule vs Logistic Regression vs GCN)")
+            st.caption(
+                "Evaluated on the same 97-domain labeled dataset using 5-fold cross-validation for LR. "
+                "High precision = low false-positive rate."
+            )
+
+            # Model comparison table
+            if _os.path.exists(_model_comp):
+                comp_df = _pd_tab6.read_csv(_model_comp) if _os.path.exists(_ablation_path) else None
+                if comp_df is None:
+                    import pandas as _pd2
+                    comp_df = _pd2.read_csv(_model_comp)
+
+                if _os.path.exists(_eval_path):
+                    import json as _json_tab6
+                    ev_data = _json_tab6.loads(open(_eval_path).read())
+                    mc = ev_data.get("model_comparison", {})
+                    if mc:
+                        # Rebuild from JSON which has GCN too
+                        rows = [{"Model": name, **m} for name, m in mc.items()]
+                        comp_df = _pd_tab6.DataFrame(rows)
+
+                if comp_df is not None:
+                    fmt_cols = [c for c in ["f1", "precision", "recall", "accuracy"] if c in comp_df.columns]
+                    for c in fmt_cols:
+                        comp_df[c] = comp_df[c].apply(lambda x: f"{float(x):.3f}" if x != "N/A" else "N/A")
+                    st.dataframe(comp_df, use_container_width=True, hide_index=True)
+
+                if _os.path.exists("data/reports/roc_curve.png"):
+                    st.image("data/reports/roc_curve.png", caption="ROC Curves",
+                             use_container_width=True)
+            else:
+                st.info("Model comparison not yet computed. Run `python3 -m ml.baseline_logreg`.")
+
+            # ── Live signal counts from current analysis ─────────────
+            st.markdown("---")
+            st.markdown("##### Signals Triggered in This Analysis")
+            if result and "domain_verdicts" in result:
+                signal_labels = {
+                    "signal_1_similarity":   "S1 Content Similarity",
+                    "signal_2_cadence":      "S2 Cadence Anomaly",
+                    "signal_3_whois":        "S3 WHOIS Age",
+                    "signal_4_hosting":      "S4 Shared Hosting",
+                    "signal_5_link_network": "S5 Insular Links",
+                    "signal_6_wayback":      "S6 Wayback History",
+                    "signal_7_authors":      "S7 Author Overlap",
+                }
+                counts = {label: 0 for label in signal_labels.values()}
+                for dv in result["domain_verdicts"].values():
+                    for key, label in signal_labels.items():
+                        if dv.get(key, 0):
+                            counts[label] += 1
+
+                col1, col2 = st.columns(2)
+                items = list(counts.items())
+                for i, (label, count) in enumerate(items):
+                    with (col1 if i < 4 else col2):
+                        pct = count / max(len(result["domain_verdicts"]), 1)
+                        bar_w = int(pct * 20)
+                        bar = "█" * bar_w + "░" * (20 - bar_w)
+                        st.markdown(
+                            f'<div style="font-family:monospace;font-size:13px;margin:4px 0;">'
+                            f'<span style="color:#7fc3ff">{label:<22}</span> '
+                            f'<span style="color:#22c55e">{bar}</span> '
+                            f'<span style="color:#94a3b8">{count}/{len(result["domain_verdicts"])}</span>'
+                            f'</div>',
+                            unsafe_allow_html=True,
+                        )
+            else:
+                st.caption("Run an analysis above to see live signal counts.")
 
 
 # ══════════════════════════════════════════════════════

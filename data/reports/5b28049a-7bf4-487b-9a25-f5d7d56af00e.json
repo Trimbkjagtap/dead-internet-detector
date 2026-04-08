@@ -1,0 +1,25 @@
+{
+  "report_id": "5b28049a-7bf4-487b-9a25-f5d7d56af00e",
+  "saved_at": "2026-03-30T19:18:45.798483+00:00",
+  "project": "Dead Internet Detector",
+  "analyzed_at": "2026-03-30T19:18:19.338728+00:00",
+  "seed_domains": [
+    "www.northeastern.edu"
+  ],
+  "cluster_verdict": "ORGANIC",
+  "confidence": 0.76,
+  "summary": "Preliminary check only. A full network analysis has been queued in the background.",
+  "domain_verdicts": {
+    "www.northeastern.edu": {
+      "verdict": "ORGANIC",
+      "confidence": 0.76,
+      "signals_triggered": 0,
+      "signal_1_similarity": 0,
+      "signal_2_cadence": 0,
+      "signal_3_whois": 0,
+      "explanation": "No strong warning signs were found in quick domain-registration heuristics"
+    }
+  },
+  "evidence_pairs": [],
+  "analysis_type": "preliminary"
+}

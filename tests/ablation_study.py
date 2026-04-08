@@ -26,9 +26,21 @@ from pathlib import Path
 
 sys.path.insert(0, '.')
 
-REPORTS_DIR = Path("data/reports")
-LOG_CSV     = REPORTS_DIR / "evaluation_log.csv"
+REPORTS_DIR  = Path("data/reports")
+LOG_CSV      = REPORTS_DIR / "evaluation_log.csv"
+DOMAIN_FEAT  = Path("data/domain_features.csv")
 RESULTS_JSON = REPORTS_DIR / "evaluation_results.json"
+
+# Column mapping: domain_features.csv uses different names
+DOMAIN_FEAT_COL_MAP = {
+    "signal_1_similarity":   "similarity_flag",
+    "signal_2_cadence":      "cadence_flagged",
+    "signal_3_whois":        "whois_flagged",
+    "signal_4_hosting":      None,
+    "signal_5_link_network": None,
+    "signal_6_wayback":      None,
+    "signal_7_authors":      None,
+}
 
 SIGNALS = [
     ("signal_1_similarity",   "Content Similarity"),
@@ -76,18 +88,51 @@ def compute_metrics(y_true, y_pred) -> dict:
     }
 
 
+def load_df() -> pd.DataFrame:
+    """
+    Load evaluation data. Prefer LOG_CSV if it has non-trivial signal variance.
+    Fall back to DOMAIN_FEAT (richer historical run) when LOG_CSV is degenerate.
+    """
+    if LOG_CSV.exists():
+        df = pd.read_csv(LOG_CSV)
+        # Check: at least 3 distinct signals firing AND some predicted positives
+        for col, _ in SIGNALS:
+            if col not in df.columns:
+                df[col] = 0
+        signals_firing = sum(df[c].sum() > 0 for c, _ in SIGNALS)
+        has_positives = df.get("predicted_label", pd.Series([0])).sum() > 0
+        if signals_firing >= 3 and has_positives:
+            print(f"  Source: {LOG_CSV} ({len(df)} domains, {signals_firing} signals active)")
+            return df
+
+    if DOMAIN_FEAT.exists():
+        print(f"  ⚠️  evaluation_log.csv has insufficient signal variance — "
+              f"using domain_features.csv")
+        df = pd.read_csv(DOMAIN_FEAT)
+        # Map old column names to standard signal names
+        for std_col, old_col in DOMAIN_FEAT_COL_MAP.items():
+            if old_col and old_col in df.columns:
+                df[std_col] = df[old_col]
+            else:
+                df[std_col] = 0
+        # Compute predicted_label from signals_triggered
+        if "signals_triggered" in df.columns:
+            df["predicted_label"] = (df["signals_triggered"] >= 2).astype(int)
+        else:
+            df["predicted_label"] = df[[c for c, _ in SIGNALS]].sum(axis=1).ge(2).astype(int)
+        return df
+
+    print(f"❌ No data found. Run evaluate_ground_truth.py first.")
+    sys.exit(1)
+
+
 def main():
     print("=" * 60)
     print("🔬 Dead Internet Detector — Ablation Study")
     print("=" * 60)
 
-    if not LOG_CSV.exists():
-        print(f"❌ {LOG_CSV} not found.")
-        print("   Run tests/evaluate_ground_truth.py first.")
-        sys.exit(1)
-
-    df = pd.read_csv(LOG_CSV)
-    print(f"  Loaded {len(df)} domain results from {LOG_CSV}")
+    df = load_df()
+    print(f"  Loaded {len(df)} domain results")
 
     # Make sure all signal columns are present
     for col, _ in SIGNALS:

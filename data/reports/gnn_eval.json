@@ -1,0 +1,29 @@
+{
+  "timestamp": "2026-04-08T17:21:21.352578",
+  "model": "models/gnn_model.pt",
+  "n_domains": 97,
+  "n_train": 77,
+  "n_test": 20,
+  "n_features": 10,
+  "feature_cols": [
+    "avg_similarity",
+    "max_similarity",
+    "anomaly_score",
+    "burst_score",
+    "hour_variance",
+    "domain_age_days",
+    "signals_triggered",
+    "similarity_flag",
+    "cadence_flagged",
+    "whois_flagged"
+  ],
+  "test_metrics": {
+    "precision": 1.0,
+    "recall": 0.5833,
+    "f1": 0.7368,
+    "accuracy": 0.75
+  },
+  "best_val_f1": 0.7368,
+  "epochs": 150,
+  "hidden_dim": 64
+}

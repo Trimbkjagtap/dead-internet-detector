@@ -1,0 +1,40 @@
+{
+  "report_id": "9a5270ea-0695-4947-a17b-d2af33cfc5ce",
+  "saved_at": "2026-04-01T17:28:11.376329+00:00",
+  "project": "Dead Internet Detector",
+  "analyzed_at": "2026-04-01T17:21:05.489140+00:00",
+  "seed_domains": [
+    "infowars.com"
+  ],
+  "cluster_verdict": "REVIEW",
+  "confidence": 0.68,
+  "summary": "Connected to 2 related domain(s) in the network graph.",
+  "domain_verdicts": {
+    "infowars.com": {
+      "verdict": "REVIEW",
+      "confidence": 0.68,
+      "signals_triggered": 1,
+      "signal_1_similarity": 0,
+      "signal_2_cadence": 0,
+      "signal_3_whois": 0,
+      "explanation": "Connected to 2 related domain(s) in the network graph."
+    }
+  },
+  "evidence_pairs": [
+    {
+      "domain_a": "infowars.com",
+      "domain_b": "breitbart.com",
+      "similarity": 0.5372,
+      "excerpt_a": "Infowars: There's a War on For Your Mind! Skip to content Banned.Video Infowars Store LIVE Explore Home News Podcasts Breaking News Social Watch Live Infowars Network The Alex Jones Show The War Room The American Journal More Banned.Video Infowars Store Archive RSS Download Our App Terms of Service DMCA Advertise with us Affiliates Media Inquiries About InfoWars Categories: Featured Special Report",
+      "excerpt_b": "Breitbart News Network HomePage Listen : Supreme Court Debate Birthright Citizenship Trump Attends Oral Arguments in Presidential First The nine justices of the U.S. Supreme Court are debating whether the U.S. Constitution grants citizenship to every child born in the United States \u2014 or whether it exempts the children of illegal migrants and temporary visa workers. Neil Munro China Debuts Iran Pea"
+    },
+    {
+      "domain_a": "infowars.com",
+      "domain_b": "banned.video",
+      "similarity": 0.5165,
+      "excerpt_a": "Infowars: There's a War on For Your Mind! Skip to content Banned.Video Infowars Store LIVE Explore Home News Podcasts Breaking News Social Watch Live Infowars Network The Alex Jones Show The War Room The American Journal More Banned.Video Infowars Store Archive RSS Download Our App Terms of Service DMCA Advertise with us Affiliates Media Inquiries About InfoWars Categories: Featured Special Report",
+      "excerpt_b": "Banned.Video You need to sign in to do that. SIGN IN Activate Push Notifications Confirm to receive notifications when channels you've subscribed to upload new videos. You can activate this any time from the settings page. CONFIRM CANCEL Share Copy Link Copy Embed Cancel LIVE TV SIGN IN Home History Watch Later Liked Videos Install App Toggle Theme The Alex Jones Show War Room American Journal Sun"
+    }
+  ],
+  "analysis_type": "cached"
+}
