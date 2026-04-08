@@ -33,3 +33,40 @@ def bounded_contamination(sample_size: int) -> float:
     if sample_size <= 0:
         return CADENCE_CONTAMINATION_MIN
     return min(CADENCE_CONTAMINATION_MAX, max(CADENCE_CONTAMINATION_MIN, 1.0 / sample_size))
+
+
+def compute_confidence_from_signals(signals: int, max_sim: float = 0.0,
+                                    burst: float = 0.0, gnn_prob: float = 0.0) -> float:
+    """
+    Single canonical confidence formula used across verdict_agent, main.py, and app.py.
+    Returns a float in [0.02, 0.97].
+
+    Tier anchoring:
+      SYNTHETIC (>=3 signals): base 0.65, max 0.97
+      REVIEW    (1-2 signals): base 0.40, max 0.64
+      ORGANIC   (0 signals):   inverted — base 0.70, max 0.97
+    """
+    signals  = int(signals)
+    max_sim  = float(max_sim)
+    burst    = float(burst)
+    gnn_prob = float(gnn_prob)
+
+    sim_boost     = min(max_sim * 0.20, 0.10)
+    cadence_boost = min(burst   * 0.15, 0.06)
+    gnn_boost     = gnn_prob * 0.05
+
+    if signals >= 3:
+        base         = 0.65
+        signal_boost = min((signals - 3) / 4.0, 1.0) * 0.20
+        confidence   = base + signal_boost + sim_boost + cadence_boost + gnn_boost
+        confidence   = max(0.65, min(confidence, 0.97))
+    elif signals >= 1:
+        base         = 0.40
+        signal_boost = (signals - 1) * 0.10
+        confidence   = base + signal_boost + sim_boost + cadence_boost + gnn_boost
+        confidence   = max(0.02, min(confidence, 0.64))
+    else:
+        # ORGANIC — invert: lower suspicion scores = higher organic confidence
+        confidence = max(0.70, min(1.0 - (sim_boost + cadence_boost + gnn_boost), 0.97))
+
+    return round(confidence, 2)

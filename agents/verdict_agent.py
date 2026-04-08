@@ -104,50 +104,14 @@ def build_graph_tensors(features: dict, sim_edges: dict):
 
 
 def compute_confidence(feats: dict, syn_prob: float) -> float:
-    """
-    Compute suspicion confidence (0–1, higher = more suspicious).
-    For ORGANIC verdicts the caller inverts this to mean "confidence it's clean".
-
-    Formula is verdict-tier anchored so that:
-      - REVIEW  (1–2 signals): base 0.40, max ~0.64
-      - SYNTHETIC (3–7 signals): base 0.65, max 0.97
-
-    Within each tier, confidence rises with:
-      - Extra signals beyond the tier minimum     (up to +0.20)
-      - High content similarity score             (up to +0.10)
-      - Anomalous cadence burst score             (up to +0.06)
-      - GNN synthetic probability (5% weight)     (up to +0.05)
-    """
-    signals = int(feats.get('signals_triggered', 0))
-    max_sim = float(feats.get('max_similarity', 0))
-    burst   = float(feats.get('burst_score', 0))
-
-    if signals >= 3:
-        # SYNTHETIC tier: base 0.65, boosted by signals 4–7
-        base          = 0.65
-        signal_boost  = min((signals - 3) / 4.0, 1.0) * 0.20   # up to +0.20 for 4→7 signals
-    elif signals >= 1:
-        # REVIEW tier: base 0.40, 2nd signal adds +0.10, hard-capped at 0.64
-        base          = 0.40
-        signal_boost  = (signals - 1) * 0.10                    # +0.10 for signal 2
-    else:
-        # ORGANIC — caller handles this via separate inversion formula
-        base          = 0.0
-        signal_boost  = 0.0
-
-    sim_boost     = min(max_sim * 0.20, 0.10)     # up to +0.10
-    cadence_boost = min(burst * 0.15, 0.06)        # up to +0.06
-    gnn_boost     = syn_prob * 0.05                # up to +0.05
-
-    confidence = base + signal_boost + sim_boost + cadence_boost + gnn_boost
-    # Hard cap per tier so REVIEW never overlaps the SYNTHETIC floor
-    if signals >= 3:
-        confidence = max(0.65, min(confidence, 0.97))
-    elif signals >= 1:
-        confidence = max(0.02, min(confidence, 0.64))
-    else:
-        confidence = max(0.02, min(confidence, 0.97))
-    return round(confidence, 2)
+    """Delegates to the canonical formula in config.signal_config."""
+    from config.signal_config import compute_confidence_from_signals
+    return compute_confidence_from_signals(
+        signals  = int(feats.get('signals_triggered', 0)),
+        max_sim  = float(feats.get('max_similarity', 0)),
+        burst    = float(feats.get('burst_score', 0)),
+        gnn_prob = float(syn_prob),
+    )
 
 
 def generate_explanation(domain: str, feats: dict) -> str:

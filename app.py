@@ -873,7 +873,7 @@ with tab_analyze:
             )
 
             if st.button("Generate AI Analysis", type="primary"):
-                with st.spinner("GPT-4o analyzing…"):
+                with st.spinner("GPT-4o-mini analyzing…"):
                     try:
                         from openai import OpenAI
                         from dotenv import load_dotenv
@@ -882,28 +882,47 @@ with tab_analyze:
 
                         domain_summary = "\n".join([
                             f"- {d}: {v.get('verdict')} "
-                            f"(signals={v.get('signals_triggered',0)}/7 — "
-                            f"similarity={v.get('signal_1_similarity',0)}, "
-                            f"hosting={v.get('signal_4_hosting',0)}, "
-                            f"wayback={v.get('signal_6_wayback',0)}, "
-                            f"authors={v.get('signal_7_authors',0)})"
+                            f"(signals={v.get('signals_triggered',0)}/7 | "
+                            f"sim={v.get('max_similarity', v.get('signal_1_similarity',0)):.2f}, "
+                            f"cadence_burst={v.get('burst_score',0):.2f}, "
+                            f"domain_age={v.get('domain_age_days','?')}d, "
+                            f"hosting={v.get('hosting_org','?')}, "
+                            f"insular={v.get('insular_score',0):.2f}, "
+                            f"wayback_snaps={v.get('wayback_snapshot_count','?')} [{v.get('wayback_flag_reason','')}], "
+                            f"shared_authors={v.get('shared_authors','[]')})"
                             for d, v in domain_verdicts.items()
                         ])
-                        prompt = f"""You are helping a journalist investigate a potential coordinated fake news network.
 
-Domain analysis results (7 signals checked per domain):
+                        system_prompt = (
+                            "You are a disinformation analyst with expertise in detecting coordinated inauthentic behavior, "
+                            "working for a newsroom fact-checking desk. You are rigorous, evidence-based, and direct. "
+                            "You cite specific numbers when available. You distinguish between correlation and confirmed coordination."
+                        )
+
+                        user_prompt = f"""Investigate whether this domain cluster is a coordinated synthetic content network.
+
+SIGNAL KEY: 1=content similarity, 2=publishing cadence, 3=WHOIS registration age, 4=shared hosting/IP, 5=insular link network, 6=Wayback Machine history, 7=shared author bylines.
+
+DOMAIN DATA (raw scores included):
 {domain_summary}
 
-Overall verdict: {verdict}
+OVERALL CLUSTER VERDICT: {verdict}
 
-Signals explained: 1=content similarity, 2=publishing cadence, 3=WHOIS registration, 4=shared hosting IP, 5=insular link network, 6=Wayback Machine history, 7=shared author names.
+INSTRUCTIONS — Think step by step:
+1. For each triggered signal, state what the specific numbers mean and whether they are strong or weak evidence of coordination.
+2. State your overall assessment: does this look like a real independent news operation, a coordinated fake network, or ambiguous?
+3. List the two most suspicious specific findings with exact values.
+4. Recommend three concrete next steps for a journalist to verify or refute the verdict (e.g., WHOIS lookup, Shodan IP search, author LinkedIn check).
 
-Provide: (1) what the triggered signals suggest about coordination, (2) whether this looks like a real news operation or a fake network, (3) the most suspicious specific findings, (4) what a journalist should investigate next (e.g. check ownership records, interview sources). Be direct and concise."""
+Be direct. Cite numbers. Do not hedge with "may" or "could" when the data is clear."""
 
                         resp = client.chat.completions.create(
                             model="gpt-4o-mini",
-                            messages=[{"role": "user", "content": prompt}],
-                            max_tokens=350, temperature=0.3,
+                            messages=[
+                                {"role": "system", "content": system_prompt},
+                                {"role": "user",   "content": user_prompt},
+                            ],
+                            max_tokens=600, temperature=0.2,
                         )
                         st.session_state["ai_analysis"] = resp.choices[0].message.content
                     except Exception as e:
@@ -945,16 +964,8 @@ Provide: (1) what the triggered signals suggest about coordination, (2) whether 
 
                     max_sim  = float(dv.get("max_similarity", 0) or 0)
                     _burst   = float(dv.get("burst_score",    0) or 0)
-                    if signals_fired >= 3:
-                        recomputed_conf = round(max(0.65, min(0.97,
-                            0.65 + min((signals_fired - 3) / 4.0, 1.0) * 0.20
-                            + min(max_sim * 0.20, 0.10) + min(_burst * 0.15, 0.06))), 2)
-                    elif signals_fired >= 1:
-                        recomputed_conf = round(max(0.02, min(0.64,
-                            0.40 + (signals_fired - 1) * 0.10
-                            + min(max_sim * 0.20, 0.10) + min(_burst * 0.15, 0.06))), 2)
-                    else:
-                        recomputed_conf = round(max(0.70, min(1.0 - min(max_sim * 0.20, 0.20), 0.97)), 2)
+                    from config.signal_config import compute_confidence_from_signals
+                    recomputed_conf = compute_confidence_from_signals(signals_fired, max_sim, _burst)
 
                     icon = "🔴" if v == "SYNTHETIC" else ("🟡" if v == "REVIEW" else "🟢")
 
@@ -1376,29 +1387,31 @@ with tab_monitor:
                     paper_bgcolor="rgba(0,0,0,0)",
                     plot_bgcolor="rgba(255,255,255,0.02)",
                     font_color="#94a3b8",
-                    height=240,
-                    margin=dict(l=0, r=0, t=36, b=0),
+                    height=280,
+                    margin=dict(l=40, r=16, t=56, b=40),
                     legend=dict(
                         bgcolor="rgba(0,0,0,0)", orientation="h",
-                        yanchor="bottom", y=1.05, xanchor="left", x=0,
+                        yanchor="bottom", y=1.08, xanchor="left", x=0,
                         font=dict(size=11),
                     ),
                     xaxis=dict(
                         gridcolor="rgba(255,255,255,0.04)",
                         tickfont=dict(size=10),
-                        tickangle=0,
+                        tickangle=-30,
+                        automargin=True,
                     ),
                     yaxis=dict(
                         gridcolor="rgba(255,255,255,0.05)", dtick=1,
                         title=dict(text="Batches", font=dict(size=11, color="#64748b")),
                     ),
-                    bargap=0.25,
+                    bargap=0.35,
                     title=dict(
                         text="Batch Composition per Run  ·  Synthetic vs Organic",
-                        font=dict(size=12, color="#64748b"), x=0,
+                        font=dict(size=12, color="#64748b"), x=0, y=0.97,
+                        yanchor="top",
                     ),
                 )
-                st.plotly_chart(fig_bar, width="stretch")
+                st.plotly_chart(fig_bar, use_container_width=True)
 
             with hist_col:
                 st.markdown(

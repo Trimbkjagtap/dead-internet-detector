@@ -91,12 +91,22 @@ def _load_jobs() -> dict:
     return {}
 
 
+_jobs_lock: "threading.Lock"  # forward declaration; assigned after import below
+
+
 def _save_jobs() -> None:
+    import tempfile, os
     _JOBS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    _JOBS_FILE.write_text(json.dumps(_jobs, indent=2), encoding="utf-8")
+    # Atomic write: write to temp file then rename to avoid partial-write corruption
+    tmp = _JOBS_FILE.with_suffix(".tmp")
+    tmp.write_text(json.dumps(_jobs, indent=2), encoding="utf-8")
+    os.replace(tmp, _JOBS_FILE)
 
 
 _jobs: dict = _load_jobs()
+
+import threading as _threading
+_jobs_lock = _threading.Lock()
 
 
 def _now_iso() -> str:
@@ -382,16 +392,8 @@ def _lookup_cached_domain(domain: str) -> Dict:
     _signals = int(node.get("signals_triggered") or 0)
     _max_sim = float(node.get("max_similarity") or 0)
     _burst   = float(node.get("burst_score") or 0)
-    if _signals >= 3:
-        confidence = max(0.65, min(0.97, 0.65 + min((_signals - 3) / 4.0, 1.0) * 0.20
-                         + min(_max_sim * 0.20, 0.10) + min(_burst * 0.15, 0.06)))
-    elif _signals >= 1:
-        confidence = max(0.02, min(0.64, 0.40 + (_signals - 1) * 0.10
-                         + min(_max_sim * 0.20, 0.10) + min(_burst * 0.15, 0.06)))
-    else:
-        sim_boost  = min(_max_sim * 0.20, 0.20)
-        confidence = max(0.70, min(0.97, 1.0 - sim_boost))
-    confidence = round(confidence, 2)
+    from config.signal_config import compute_confidence_from_signals
+    confidence = compute_confidence_from_signals(_signals, _max_sim, _burst)
     related_count = int(node.get("related_count") or 0)
     reasons = []
 
@@ -675,58 +677,79 @@ async def get_lookup_job(job_id: str):
     return job
 
 
-@app.post("/analyze", tags=["Analysis"])
-async def analyze_domains(request: AnalyzeRequest):
-    """
-    Run the full 4-agent pipeline on a list of seed domains.
+def _run_analyze_job(job_id: str, domains: list) -> None:
+    """Background worker for /analyze. Updates _jobs[job_id] when done."""
+    try:
+        from agents.crew import run_analysis
+        result = run_analysis(domains)
+        result['analyzed_at'] = datetime.now(timezone.utc).isoformat()
+        result['api_version']  = "1.0.0"
+        with _jobs_lock:
+            _jobs[job_id]["status"]      = "completed"
+            _jobs[job_id]["completed_at"] = _now_iso()
+            _jobs[job_id]["result"]       = result
+            _save_jobs()
+    except Exception as e:
+        with _jobs_lock:
+            _jobs[job_id]["status"] = "failed"
+            _jobs[job_id]["error"]  = str(e)
+            _save_jobs()
 
+
+@app.post("/analyze", tags=["Analysis"])
+async def analyze_domains(request: AnalyzeRequest, background_tasks: BackgroundTasks):
+    """
+    Queue the full 4-agent pipeline on a list of seed domains.
+    Returns immediately with a job_id. Poll /analyze/job/{job_id} for results.
+
+    Pipeline:
     - Agent 1 crawls the domains
-    - Agent 2 computes 3 signals (similarity, cadence, WHOIS)
+    - Agent 2 computes 7 signals
     - Agent 3 updates the Neo4j graph
     - Agent 4 runs GNN inference and returns verdict
-
-    Returns verdict JSON with confidence score and explanation.
     """
-    # Validate input
     if not request.domains:
         raise HTTPException(status_code=400, detail="No domains provided")
-
     if len(request.domains) > 20:
-        raise HTTPException(
-            status_code=400,
-            detail="Maximum 20 domains per request"
-        )
+        raise HTTPException(status_code=400, detail="Maximum 20 domains per request")
 
-    # Clean domain inputs
     domains = []
     for d in request.domains:
-        d = d.strip().lower()
-        # Remove protocol if included
-        d = d.replace("https://", "").replace("http://", "")
-        # Remove trailing slashes
-        d = d.rstrip("/")
+        d = d.strip().lower().replace("https://", "").replace("http://", "").rstrip("/")
         if d:
             domains.append(d)
-
     if not domains:
         raise HTTPException(status_code=400, detail="No valid domains after cleaning")
 
-    try:
-        # Run the full pipeline
-        from agents.crew import run_analysis
-        result = run_analysis(domains)
+    job_id = f"analyze_{uuid.uuid4().hex[:12]}"
+    with _jobs_lock:
+        _jobs[job_id] = {
+            "job_id":      job_id,
+            "job_type":    "full_analysis",
+            "status":      "queued",
+            "domains":     domains,
+            "queued_at":   _now_iso(),
+        }
+        _save_jobs()
 
-        # Add metadata
-        result['analyzed_at'] = datetime.now(timezone.utc).isoformat()
-        result['api_version']  = "1.0.0"
+    background_tasks.add_task(_run_analyze_job, job_id, domains)
+    return {
+        "status":         "queued",
+        "job_id":         job_id,
+        "job_status_url": f"/analyze/job/{job_id}",
+        "domains":        domains,
+    }
 
-        return result
 
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Analysis failed: {str(e)}"
-        )
+@app.get("/analyze/job/{job_id}", tags=["Analysis"])
+async def get_analyze_job(job_id: str):
+    """Poll the status of a queued /analyze job."""
+    job = _jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Analysis job not found")
+    if job.get("job_type") != "full_analysis":
+        raise HTTPException(status_code=400, detail="Job is not a full analysis job")
+    return job
 
 
 @app.get("/graph/neighborhood/{domain}", tags=["Graph"])
