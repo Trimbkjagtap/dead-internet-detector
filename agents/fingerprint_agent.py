@@ -245,7 +245,9 @@ def compute_signal1_similarity(domains_data: list) -> dict:
 
 
     model   = get_model()
-    texts   = [d.get('text', '')[:1000] for d in domains_data]
+    # Prefer body_text (article body only, nav/sidebar stripped) over full text.
+    # Falls back to text[:1000] for records crawled before body_text was added.
+    texts   = [d.get('body_text') or d.get('text', '')[:1000] for d in domains_data]
     domains = [d['domain'] for d in domains_data]
     # author lists per domain for syndication classification
     authors_by_domain = {d['domain']: d.get('article_authors', []) for d in domains_data}
@@ -259,8 +261,9 @@ def compute_signal1_similarity(domains_data: list) -> dict:
     # Build edges and per-domain scores
     edges         = {}
     domain_scores = {}
-    # Map domain -> short excerpt for evidence display (first 400 chars of clean text)
-    excerpts      = {d['domain']: d.get('text', '')[:400].strip() for d in domains_data}
+    # Map domain -> short excerpt for evidence display (body text preferred)
+    excerpts      = {d['domain']: (d.get('body_text') or d.get('text', ''))[:400].strip()
+                    for d in domains_data}
 
     for i in range(len(domains)):
         similarities = []

@@ -170,7 +170,31 @@ def fetch_page(url: str) -> dict | None:
 
         soup = BeautifulSoup(response.text, "html.parser")
 
-        # Remove noise tags
+        # ── body_text: article body only (for Signal 1 embeddings) ──
+        # Deep-strip boilerplate before extracting semantic content.
+        # This prevents nav/footer/sidebar templates from inflating
+        # cosine similarity between unrelated sites using the same CMS.
+        _STRIP_TAGS    = {"script", "style", "nav", "footer", "header",
+                          "aside", "form", "noscript", "iframe"}
+        _STRIP_CLASSES = {"menu", "sidebar", "cookie", "banner", "ad-",
+                          "widget", "newsletter", "related", "social",
+                          "share", "comment", "breadcrumb", "pagination",
+                          "tag", "category", "author-bio", "promo"}
+        body_soup = BeautifulSoup(response.text, "html.parser")
+        for tag in body_soup.find_all(_STRIP_TAGS):
+            tag.decompose()
+        for tag in body_soup.find_all(True):
+            cls = " ".join(tag.get("class", []) + [tag.get("id", "")]).lower()
+            if any(k in cls for k in _STRIP_CLASSES):
+                tag.decompose()
+        # Prefer <article>, <main>, or <div role="main"> if present
+        article_tag = (body_soup.find("article") or
+                       body_soup.find("main") or
+                       body_soup.find(attrs={"role": "main"}))
+        body_root  = article_tag if article_tag else body_soup
+        body_text  = " ".join(body_root.get_text(separator=" ", strip=True).split())[:2000]
+
+        # ── text: full cleaned page (legacy, kept for compatibility) ──
         for tag in soup(["script", "style", "nav", "footer",
                           "header", "aside", "form"]):
             tag.decompose()
@@ -203,6 +227,7 @@ def fetch_page(url: str) -> dict | None:
             "final_url":            final_url,
             "final_domain":         final_domain,
             "text":                 text,
+            "body_text":            body_text,
             "links":                "|".join(links),
             "timestamp":            datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
             "status":               "ok",
